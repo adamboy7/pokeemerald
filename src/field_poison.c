@@ -43,9 +43,11 @@ static void FaintFromFieldPoison(u8 partyIdx)
 {
     struct Pokemon *pokemon = &gPlayerParty[partyIdx];
     u32 status = STATUS1_NONE;
+    u32 hp = 1;
 
-    AdjustFriendship(pokemon, FRIENDSHIP_EVENT_FAINT_FIELD_PSN);
+    // Prevent fainting, cure poison, and leave the Pokémon at 1 HP
     SetMonData(pokemon, MON_DATA_STATUS, &status);
+    SetMonData(pokemon, MON_DATA_HP, &hp);
     GetMonData(pokemon, MON_DATA_NICKNAME, gStringVar1);
     StringGet_Nickname(gStringVar1);
 }
@@ -73,7 +75,7 @@ static void Task_TryFieldPoisonWhiteOut(u8 taskId)
             if (MonFaintedFromPoison(tPartyIdx))
             {
                 FaintFromFieldPoison(tPartyIdx);
-                ShowFieldMessage(gText_PkmnFainted_FldPsn);
+                ShowFieldMessage(gText_PkmnRecoveredFromPoison);
                 tState++;
                 return;
             }
