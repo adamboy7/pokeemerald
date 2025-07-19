@@ -204,6 +204,8 @@ void NewGameInitData(void)
     WipeTrainerNameRecords();
     ResetTrainerHillResults();
     ResetContestLinkResults();
+    EnableMysteryGift();
+    EnableMysteryEvent();
 }
 
 static void ResetMiniGamesRecords(void)
