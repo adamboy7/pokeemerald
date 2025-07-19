@@ -275,6 +275,7 @@ static void SpriteCB_SlideCaughtMonToCenter(struct Sprite *sprite);
 static void PrintMonInfo(u32 num, u32, u32 owned, u32 newEntry);
 static void PrintMonHeight(u16 height, u8 left, u8 top);
 static void PrintMonWeight(u16 weight, u8 left, u8 top);
+static void PrintMonEVYield(u16 species, u8 left, u8 top);
 static void ResetOtherVideoRegisters(u16);
 static u8 PrintCryScreenSpeciesName(u8, u16, u8, u8);
 static void PrintDecimalNum(u8 windowId, u16 num, u8 left, u8 top);
@@ -4134,15 +4135,18 @@ static void PrintMonInfo(u32 num, u32 value, u32 owned, u32 newEntry)
     PrintInfoScreenText(category, 0x64, 0x29);
     PrintInfoScreenText(gText_HTHeight, 0x60, 0x39);
     PrintInfoScreenText(gText_WTWeight, 0x60, 0x49);
+    PrintInfoScreenText(gText_EVs, 0x60, 0x59);
     if (owned)
     {
         PrintMonHeight(gPokedexEntries[num].height, 0x81, 0x39);
         PrintMonWeight(gPokedexEntries[num].weight, 0x81, 0x49);
+        PrintMonEVYield(natNum, 0x81, 0x59);
     }
     else
     {
         PrintInfoScreenText(gText_UnkHeight, 0x81, 0x39);
         PrintInfoScreenText(gText_UnkWeight, 0x81, 0x49);
+        PrintInfoScreenText(gText_UnkEVs, 0x81, 0x59);
     }
     if (owned)
         description = gPokedexEntries[num].description;
@@ -4239,6 +4243,75 @@ static void PrintMonWeight(u16 weight, u8 left, u8 top)
     buffer[i++] = CHAR_s;
     buffer[i++] = CHAR_PERIOD;
     buffer[i++] = EOS;
+    PrintInfoScreenText(buffer, left, top);
+}
+
+static void PrintMonEVYield(u16 species, u8 left, u8 top)
+{
+    u8 buffer[64];
+    u8 *str = buffer;
+    bool8 first = TRUE;
+    const struct SpeciesInfo *info = &gSpeciesInfo[species];
+
+    if (info->evYield_HP)
+    {
+        str = ConvertIntToDecimalStringN(str, info->evYield_HP, STR_CONV_MODE_LEFT_ALIGN, 1);
+        str = StringAppend(str, gText_Space);
+        str = StringAppend(str, gText_HP3);
+        first = FALSE;
+    }
+    if (info->evYield_Attack)
+    {
+        if (!first)
+            str = StringAppend(str, gText_CommaSpace);
+        str = ConvertIntToDecimalStringN(str, info->evYield_Attack, STR_CONV_MODE_LEFT_ALIGN, 1);
+        str = StringAppend(str, gText_Space);
+        str = StringAppend(str, gText_Attack3);
+        first = FALSE;
+    }
+    if (info->evYield_Defense)
+    {
+        if (!first)
+            str = StringAppend(str, gText_CommaSpace);
+        str = ConvertIntToDecimalStringN(str, info->evYield_Defense, STR_CONV_MODE_LEFT_ALIGN, 1);
+        str = StringAppend(str, gText_Space);
+        str = StringAppend(str, gText_Defense3);
+        first = FALSE;
+    }
+    if (info->evYield_SpAttack)
+    {
+        if (!first)
+            str = StringAppend(str, gText_CommaSpace);
+        str = ConvertIntToDecimalStringN(str, info->evYield_SpAttack, STR_CONV_MODE_LEFT_ALIGN, 1);
+        str = StringAppend(str, gText_Space);
+        str = StringAppend(str, gText_SpAtk4);
+        first = FALSE;
+    }
+    if (info->evYield_SpDefense)
+    {
+        if (!first)
+            str = StringAppend(str, gText_CommaSpace);
+        str = ConvertIntToDecimalStringN(str, info->evYield_SpDefense, STR_CONV_MODE_LEFT_ALIGN, 1);
+        str = StringAppend(str, gText_Space);
+        str = StringAppend(str, gText_SpDef4);
+        first = FALSE;
+    }
+    if (info->evYield_Speed)
+    {
+        if (!first)
+            str = StringAppend(str, gText_CommaSpace);
+        str = ConvertIntToDecimalStringN(str, info->evYield_Speed, STR_CONV_MODE_LEFT_ALIGN, 1);
+        str = StringAppend(str, gText_Space);
+        str = StringAppend(str, gText_Speed2);
+        first = FALSE;
+    }
+
+    if (first)
+    {
+        buffer[0] = CHAR_0;
+        buffer[1] = EOS;
+    }
+
     PrintInfoScreenText(buffer, left, top);
 }
 
