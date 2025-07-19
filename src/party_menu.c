@@ -4775,8 +4775,11 @@ static void Task_LearnedMove(u8 taskId)
     if (move[1] == 0)
     {
         AdjustFriendship(mon, FRIENDSHIP_EVENT_LEARN_TMHM);
-        if (item < ITEM_HM01)
-            RemoveBagItem(item, 1);
+        // In the vanilla game TMs are consumed on use.  RemoveBagItem would
+        // delete the TM from the bag if it's not an HM.  Comment this out so
+        // that TMs are reusable and remain in the player's inventory.
+        // if (item < ITEM_HM01)
+        //     RemoveBagItem(item, 1);
     }
     GetMonNickname(mon, gStringVar1);
     StringCopy(gStringVar2, gMoveNames[move[0]]);
