@@ -100,6 +100,8 @@ static void MoveSelectionCreateCursorAt(u8, u8);
 static void MoveSelectionDestroyCursorAt(u8);
 static void MoveSelectionDisplayPpNumber(void);
 static void MoveSelectionDisplayPpString(void);
+static u8 CalcTypeMultiplier(u8 atkType, u8 defType1, u8 defType2);
+static const u8 *GetMultiplierString(u8 mult);
 static void MoveSelectionDisplayMoveType(void);
 static void MoveSelectionDisplayMoveNames(void);
 static void HandleMoveSwitching(void);
@@ -1493,17 +1495,71 @@ static void MoveSelectionDisplayPpNumber(void)
     BattlePutTextOnWindow(gDisplayedStringBattle, B_WIN_PP_REMAINING);
 }
 
+static u8 CalcTypeMultiplier(u8 atkType, u8 defType1, u8 defType2)
+{
+    int i = 0;
+    u8 mult = TYPE_MUL_NORMAL;
+
+    while (TYPE_EFFECT_ATK_TYPE(i) != TYPE_ENDTABLE)
+    {
+        if (TYPE_EFFECT_ATK_TYPE(i) == TYPE_FORESIGHT)
+        {
+            i += 3;
+            continue;
+        }
+
+        if (TYPE_EFFECT_ATK_TYPE(i) == atkType)
+        {
+            if (TYPE_EFFECT_DEF_TYPE(i) == defType1)
+                mult = (mult * TYPE_EFFECT_MULTIPLIER(i)) / TYPE_MUL_NORMAL;
+            if (defType1 != defType2 && TYPE_EFFECT_DEF_TYPE(i) == defType2)
+                mult = (mult * TYPE_EFFECT_MULTIPLIER(i)) / TYPE_MUL_NORMAL;
+        }
+
+        i += 3;
+    }
+
+    return mult;
+}
+
+static const u8 *GetMultiplierString(u8 mult)
+{
+    switch (mult)
+    {
+    case 0:
+        return (const u8 *)_("0x");
+    case 5:
+        return (const u8 *)_("0.25x");
+    case 10:
+        return (const u8 *)_("0.5x");
+    default:
+    case 20:
+        return (const u8 *)_("1x");
+    case 40:
+        return (const u8 *)_("2x");
+    case 80:
+        return (const u8 *)_("4x");
+    }
+}
+
 static void MoveSelectionDisplayMoveType(void)
 {
     u8 *txtPtr;
+    u8 targetBattler;
+    u8 multiplier;
     struct ChooseMoveStruct *moveInfo = (struct ChooseMoveStruct *)(&gBattleBufferA[gActiveBattler][4]);
+    u16 move = moveInfo->moves[gMoveSelectionCursor[gActiveBattler]];
+    u8 moveType = gBattleMoves[move].type;
+
+    targetBattler = GetDefaultMoveTarget(gActiveBattler);
+    multiplier = CalcTypeMultiplier(moveType, gBattleMons[targetBattler].types[0], gBattleMons[targetBattler].types[1]);
 
     txtPtr = StringCopy(gDisplayedStringBattle, gText_MoveInterfaceType);
     *(txtPtr)++ = EXT_CTRL_CODE_BEGIN;
     *(txtPtr)++ = EXT_CTRL_CODE_FONT;
     *(txtPtr)++ = FONT_NORMAL;
 
-    StringCopy(txtPtr, gTypeNames[gBattleMoves[moveInfo->moves[gMoveSelectionCursor[gActiveBattler]]].type]);
+    StringCopy(txtPtr, GetMultiplierString(multiplier));
     BattlePutTextOnWindow(gDisplayedStringBattle, B_WIN_MOVE_TYPE);
 }
 
