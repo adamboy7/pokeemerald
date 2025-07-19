@@ -16,6 +16,9 @@
 #include "script.h"
 #include "battle_pike.h"
 #include "battle_pyramid.h"
+#include "item.h"
+#include "item_menu.h"
+#include "sound.h"
 #include "constants/abilities.h"
 #include "constants/game_stat.h"
 #include "constants/items.h"
@@ -964,4 +967,28 @@ static void ApplyCleanseTagEncounterRateMod(u32 *encRate)
 {
     if (GetMonData(&gPlayerParty[0], MON_DATA_HELD_ITEM) == ITEM_CLEANSE_TAG)
         *encRate = *encRate * 2 / 3;
+}
+
+void TryUseNextRepel(void)
+{
+    u16 itemId;
+
+    if (CheckBagHasItem(ITEM_MAX_REPEL, 1))
+        itemId = ITEM_MAX_REPEL;
+    else if (CheckBagHasItem(ITEM_SUPER_REPEL, 1))
+        itemId = ITEM_SUPER_REPEL;
+    else if (CheckBagHasItem(ITEM_REPEL, 1))
+        itemId = ITEM_REPEL;
+    else
+    {
+        gSpecialVar_Result = FALSE;
+        return;
+    }
+
+    VarSet(VAR_REPEL_STEP_COUNT, GetItemHoldEffectParam(itemId));
+    RemoveBagItem(itemId, 1);
+    gSpecialVar_ItemId = itemId;
+    CopyItemName(itemId, gStringVar2);
+    PlaySE(SE_REPEL);
+    gSpecialVar_Result = TRUE;
 }

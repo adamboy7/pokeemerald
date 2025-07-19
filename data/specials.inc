@@ -219,10 +219,11 @@ gSpecials::
 	def_special EnterSafariMode
 	def_special ExitSafariMode
 	def_special GetPokeblockFeederInFront
-	def_special OpenPokeblockCaseOnFeeder
-	def_special IsMirageIslandPresent
-	def_special UpdateShoalTideFlag
-	def_special InitBirchState
+        def_special OpenPokeblockCaseOnFeeder
+        def_special IsMirageIslandPresent
+        def_special UpdateShoalTideFlag
+        def_special TryUseNextRepel
+        def_special InitBirchState
 	def_special ScriptGetPokedexInfo
 	def_special ShowPokedexRatingMessage
 	def_special DoPCTurnOnEffect
