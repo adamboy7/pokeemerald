@@ -193,6 +193,43 @@ s32 Div(s32 num, s32 denom)
     return num / denom;
 }
 
+void SoundDriverInit(void)
+{
+}
+
+void SoundDriverMain(void)
+{
+}
+
+void SoundDriverVSync(void)
+{
+}
+
+void SoundDriverVSyncOff(void)
+{
+}
+
+void SoundDriverVSyncOn(void)
+{
+}
+
+void SoundDriverMode(u32 mode)
+{
+    (void)mode;
+}
+
+void SoundBiasReset(void)
+{
+}
+
+void SoundBiasSet(void)
+{
+}
+
+void SoundBiasChange(void)
+{
+}
+
 #else
 #error "PLATFORM_PC must be defined"
 #endif // PLATFORM_PC
