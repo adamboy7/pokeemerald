@@ -94,33 +94,88 @@ void ObjAffineSet(struct ObjAffineSrcData *src, void *dest, s32 count, s32 offse
     }
 }
 
-static void LZ77Stub(const u32 *src, void *dest)
+static void LZ77UnComp(const u8 *src, u8 *dest)
 {
-    // Very small placeholder: the size is stored in the top 24 bits after the first byte.
-    // This does not actually decompress but allows graphics to be treated as raw.
-    u32 header = *src++;
-    u32 size = header >> 8;
-    memcpy(dest, src, size);
+    u32 header = *(const u32 *)src;
+    src += 4;
+    u32 remaining = header >> 8;
+
+    while (remaining)
+    {
+        u8 flags = *src++;
+        for (int i = 0; i < 8 && remaining; i++, flags <<= 1)
+        {
+            if (flags & 0x80)
+            {
+                u8 byte1 = *src++;
+                u8 byte2 = *src++;
+                int disp = ((byte1 & 0xF) << 8) | byte2;
+                int count = (byte1 >> 4) + 3;
+                const u8 *copySrc = dest - disp - 1;
+                for (int j = 0; j < count && remaining; j++)
+                {
+                    *dest++ = *copySrc++;
+                    remaining--;
+                }
+            }
+            else
+            {
+                *dest++ = *src++;
+                remaining--;
+            }
+        }
+    }
+}
+
+static void RLUnComp(const u8 *src, u8 *dest)
+{
+    u32 header = *(const u32 *)src;
+    src += 4;
+    u32 remaining = header >> 8;
+
+    while (remaining)
+    {
+        u8 info = *src++;
+        if (info & 0x80)
+        {
+            int count = (info & 0x7F) + 3;
+            u8 value = *src++;
+            for (int i = 0; i < count && remaining; i++)
+            {
+                *dest++ = value;
+                remaining--;
+            }
+        }
+        else
+        {
+            int count = (info & 0x7F) + 1;
+            for (int i = 0; i < count && remaining; i++)
+            {
+                *dest++ = *src++;
+                remaining--;
+            }
+        }
+    }
 }
 
 void LZ77UnCompWram(const u32 *src, void *dest)
 {
-    LZ77Stub(src, dest);
+    LZ77UnComp((const u8 *)src, dest);
 }
 
 void LZ77UnCompVram(const u32 *src, void *dest)
 {
-    LZ77Stub(src, dest);
+    LZ77UnComp((const u8 *)src, dest);
 }
 
 void RLUnCompWram(const u32 *src, void *dest)
 {
-    LZ77Stub(src, dest);
+    RLUnComp((const u8 *)src, dest);
 }
 
 void RLUnCompVram(const u32 *src, void *dest)
 {
-    LZ77Stub(src, dest);
+    RLUnComp((const u8 *)src, dest);
 }
 
 int MultiBoot(struct MultiBootParam *mp)
