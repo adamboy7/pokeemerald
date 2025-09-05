@@ -24,6 +24,9 @@
 #include "main.h"
 #include "trainer_hill.h"
 #include "constants/rgb.h"
+#ifdef PC
+#include <stdlib.h>
+#endif
 
 static void VBlankIntr(void);
 static void HBlankIntr(void);
@@ -69,6 +72,12 @@ COMMON_DATA u8 gLinkVSyncDisabled = 0;
 COMMON_DATA u32 IntrMain_Buffer[0x200] = {0};
 COMMON_DATA s8 gPcmDmaCounter = 0;
 
+#ifdef PC
+u8 *gPCVram;
+u8 *gPCPltt;
+u8 *gPCOam;
+#endif
+
 static EWRAM_DATA u16 sTrainerId = 0;
 
 //EWRAM_DATA void (**gFlashTimerIntrFunc)(void) = NULL;
@@ -93,6 +102,11 @@ void AgbMain(void)
 #if !MODERN
     RegisterRamReset(RESET_ALL);
 #endif //MODERN
+#ifdef PC
+    gPCVram = malloc(VRAM_SIZE);
+    gPCPltt = malloc(PLTT_SIZE);
+    gPCOam = malloc(OAM_SIZE);
+#endif
     *(vu16 *)BG_PLTT = RGB_WHITE; // Set the backdrop to white on startup
     InitGpuRegManager();
     REG_WAITCNT = WAITCNT_PREFETCH_ENABLE | WAITCNT_WS0_S_1 | WAITCNT_WS0_N_3;
