@@ -5,6 +5,9 @@
 #include "gpu_regs.h"
 #include "task.h"
 #include "constants/rgb.h"
+#ifdef PC
+#include <string.h>
+#endif
 
 enum
 {
@@ -106,7 +109,11 @@ void TransferPlttBuffer(void)
     {
         void *src = gPlttBufferFaded;
         void *dest = (void *)PLTT;
+#ifdef PC
+        memcpy(dest, src, PLTT_SIZE);
+#else
         DmaCopy16(3, src, dest, PLTT_SIZE);
+#endif
         sPlttBufferTransferPending = FALSE;
         if (gPaletteFade.mode == HARDWARE_FADE && gPaletteFade.active)
             UpdateBlendRegisters();
@@ -145,14 +152,18 @@ void ResetPaletteFade(void)
 
 static void ReadPlttIntoBuffers(void)
 {
-    u16 i;
     u16 *pltt = (u16 *)PLTT;
-
+#ifdef PC
+    memcpy(gPlttBufferUnfaded, pltt, PLTT_SIZE);
+    memcpy(gPlttBufferFaded, pltt, PLTT_SIZE);
+#else
+    u16 i;
     for (i = 0; i < PLTT_BUFFER_SIZE; i++)
     {
         gPlttBufferUnfaded[i] = pltt[i];
         gPlttBufferFaded[i] = pltt[i];
     }
+#endif
 }
 
 bool8 BeginNormalPaletteFade(u32 selectedPalettes, s8 delay, u8 startY, u8 targetY, u16 blendColor)
