@@ -229,11 +229,11 @@ $(shell mkdir -p $(SUBDIRS))
 modern: all
 compare: all
 
-pc: $(BUILD_DIR)/pc_bios.o
+pc: $(BUILD_DIR)/pc_bios
 
-$(BUILD_DIR)/pc_bios.o: $(C_SUBDIR)/pc_bios.c
+$(BUILD_DIR)/pc_bios: $(C_SUBDIR)/pc_bios.c
 	mkdir -p $(dir $@)
-	$(HOSTCC) -DPLATFORM_PC -I include -c $< -o $@
+	$(HOSTCC) -DPLATFORM_PC -DUSE_SDL $(shell sdl2-config --cflags 2>/dev/null) -I include $< -o $@ $(shell sdl2-config --libs 2>/dev/null || echo -lSDL2)
 
 # Other rules
 rom: $(ROM)
