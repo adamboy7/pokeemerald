@@ -1,9 +1,11 @@
-#include "global.h"
+#include "gba/gba.h"
 
 #ifdef PLATFORM_PC
 #include <math.h>
-#include <string.h>
+#include <stddef.h>
 #include <unistd.h>
+
+void *memcpy(void *dest, const void *src, size_t n);
 
 // Simple stubs for GBA BIOS calls when running on a desktop PC.
 // These provide minimal behaviour sufficient for bringing up the engine
@@ -191,5 +193,7 @@ s32 Div(s32 num, s32 denom)
     return num / denom;
 }
 
+#else
+#error "PLATFORM_PC must be defined"
 #endif // PLATFORM_PC
 

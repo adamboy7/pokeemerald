@@ -44,6 +44,7 @@ OBJCOPY := $(PREFIX)objcopy
 OBJDUMP := $(PREFIX)objdump
 AS := $(PREFIX)as
 LD := $(PREFIX)ld
+HOSTCC := $(shell command -v clang >/dev/null 2>&1 && echo clang || echo gcc)
 
 EXE :=
 ifeq ($(OS),Windows_NT)
@@ -160,7 +161,7 @@ MAKEFLAGS += --no-print-directory
 # Delete files that weren't built properly
 .DELETE_ON_ERROR:
 
-RULES_NO_SCAN += libagbsyscall clean clean-assets tidy tidymodern tidynonmodern generated clean-generated
+RULES_NO_SCAN += libagbsyscall clean clean-assets tidy tidymodern tidynonmodern generated clean-generated pc
 .PHONY: all rom modern compare
 .PHONY: $(RULES_NO_SCAN)
 
@@ -197,6 +198,7 @@ endif
 # Collect sources
 C_SRCS_IN := $(wildcard $(C_SUBDIR)/*.c $(C_SUBDIR)/*/*.c $(C_SUBDIR)/*/*/*.c)
 C_SRCS := $(foreach src,$(C_SRCS_IN),$(if $(findstring .inc.c,$(src)),,$(src)))
+C_SRCS := $(filter-out $(C_SUBDIR)/pc_bios.c,$(C_SRCS))
 C_OBJS := $(patsubst $(C_SUBDIR)/%.c,$(C_BUILDDIR)/%.o,$(C_SRCS))
 
 C_ASM_SRCS := $(wildcard $(C_SUBDIR)/*.s $(C_SUBDIR)/*/*.s $(C_SUBDIR)/*/*/*.s)
@@ -226,6 +228,12 @@ $(shell mkdir -p $(SUBDIRS))
 # Pretend rules that are actually flags defer to `make all`
 modern: all
 compare: all
+
+pc: $(BUILD_DIR)/pc_bios.o
+
+$(BUILD_DIR)/pc_bios.o: $(C_SUBDIR)/pc_bios.c
+	mkdir -p $(dir $@)
+	$(HOSTCC) -DPLATFORM_PC -I include -c $< -o $@
 
 # Other rules
 rom: $(ROM)
