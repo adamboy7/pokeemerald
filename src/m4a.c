@@ -1,6 +1,7 @@
 #include "global.h"
 #include "gba/m4a_internal.h"
 
+#if PLATFORM_GBA
 extern const u8 gCgb3Vol[];
 
 #define BSS_CODE __attribute__((section(".bss.code")))
@@ -1779,3 +1780,213 @@ void SetPokemonCryPriority(u8 val)
 {
     gPokemonCrySong.priority = val;
 }
+
+#else // PLATFORM_GBA
+
+#ifdef USE_SDL
+#include <SDL2/SDL.h>
+#endif
+
+struct SoundInfo gSoundInfo;
+struct PokemonCrySong gPokemonCrySongs[MAX_POKEMON_CRIES];
+struct MusicPlayerInfo gPokemonCryMusicPlayers[MAX_POKEMON_CRIES];
+struct MusicPlayerInfo gMPlayInfo_BGM;
+struct MusicPlayerInfo gMPlayInfo_SE1;
+struct MusicPlayerInfo gMPlayInfo_SE2;
+struct MusicPlayerInfo gMPlayInfo_SE3;
+struct MusicPlayerTrack gPokemonCryTracks[MAX_POKEMON_CRIES * 2];
+struct PokemonCrySong gPokemonCrySong;
+u8 gMPlayMemAccArea[0x10];
+MPlayFunc gMPlayJumpTable[36];
+struct CgbChannel gCgbChans[4];
+
+u32 MidiKeyToFreq(struct WaveData *wav, u8 key, u8 fineAdjust)
+{
+    (void)wav;
+    (void)key;
+    (void)fineAdjust;
+    return 0;
+}
+
+void UnusedDummyFunc(void) {}
+
+void MPlayContinue(struct MusicPlayerInfo *mplayInfo)
+{
+    (void)mplayInfo;
+}
+
+void MPlayFadeOut(struct MusicPlayerInfo *mplayInfo, u16 speed)
+{
+    (void)mplayInfo;
+    (void)speed;
+}
+
+void m4aSoundInit(void)
+{
+#ifdef USE_SDL
+    SDL_Init(SDL_INIT_AUDIO);
+#endif
+}
+
+void m4aSoundMain(void) {}
+
+void m4aSoundVSync(void) {}
+
+void m4aSoundVSyncOn(void) {}
+
+void m4aSoundVSyncOff(void) {}
+
+void m4aSoundMode(u32 mode)
+{
+    (void)mode;
+}
+
+void m4aSongNumStart(u16 n)
+{
+    (void)n;
+}
+
+void m4aSongNumStartOrChange(u16 n)
+{
+    (void)n;
+}
+
+void m4aSongNumStartOrContinue(u16 n)
+{
+    (void)n;
+}
+
+void m4aSongNumStop(u16 n)
+{
+    (void)n;
+}
+
+void m4aSongNumContinue(u16 n)
+{
+    (void)n;
+}
+
+void m4aMPlayAllStop(void) {}
+
+void m4aMPlayContinue(struct MusicPlayerInfo *mplayInfo)
+{
+    (void)mplayInfo;
+}
+
+void m4aMPlayAllContinue(void) {}
+
+void m4aMPlayFadeOut(struct MusicPlayerInfo *mplayInfo, u16 speed)
+{
+    (void)mplayInfo;
+    (void)speed;
+}
+
+void m4aMPlayFadeOutTemporarily(struct MusicPlayerInfo *mplayInfo, u16 speed)
+{
+    (void)mplayInfo;
+    (void)speed;
+}
+
+void m4aMPlayFadeIn(struct MusicPlayerInfo *mplayInfo, u16 speed)
+{
+    (void)mplayInfo;
+    (void)speed;
+}
+
+void m4aMPlayImmInit(struct MusicPlayerInfo *mplayInfo)
+{
+    (void)mplayInfo;
+}
+
+void m4aMPlayStop(struct MusicPlayerInfo *mplayInfo)
+{
+    (void)mplayInfo;
+}
+
+void m4aMPlayTempoControl(struct MusicPlayerInfo *mplayInfo, u16 tempo)
+{
+    (void)mplayInfo;
+    (void)tempo;
+}
+
+void m4aMPlayVolumeControl(struct MusicPlayerInfo *mplayInfo, u16 trackBits, u16 volume)
+{
+    (void)mplayInfo;
+    (void)trackBits;
+    (void)volume;
+}
+
+void m4aMPlayPitchControl(struct MusicPlayerInfo *mplayInfo, u16 trackBits, s16 pitch)
+{
+    (void)mplayInfo;
+    (void)trackBits;
+    (void)pitch;
+}
+
+void m4aMPlayPanpotControl(struct MusicPlayerInfo *mplayInfo, u16 trackBits, s8 pan)
+{
+    (void)mplayInfo;
+    (void)trackBits;
+    (void)pan;
+}
+
+void m4aMPlayModDepthSet(struct MusicPlayerInfo *mplayInfo, u16 trackBits, u8 modDepth)
+{
+    (void)mplayInfo;
+    (void)trackBits;
+    (void)modDepth;
+}
+
+void m4aMPlayLFOSpeedSet(struct MusicPlayerInfo *mplayInfo, u16 trackBits, u8 lfoSpeed)
+{
+    (void)mplayInfo;
+    (void)trackBits;
+    (void)lfoSpeed;
+}
+
+void SetPokemonCryVolume(u8 val)
+{
+    (void)val;
+}
+
+void SetPokemonCryPanpot(s8 val)
+{
+    (void)val;
+}
+
+void SetPokemonCryPitch(s16 val)
+{
+    (void)val;
+}
+
+void SetPokemonCryLength(u16 val)
+{
+    (void)val;
+}
+
+void SetPokemonCryRelease(u8 val)
+{
+    (void)val;
+}
+
+void SetPokemonCryProgress(u32 val)
+{
+    (void)val;
+}
+
+void SetPokemonCryChorus(s8 val)
+{
+    (void)val;
+}
+
+void SetPokemonCryStereo(u32 val)
+{
+    (void)val;
+}
+
+void SetPokemonCryPriority(u8 val)
+{
+    (void)val;
+}
+
+#endif // PLATFORM_GBA
