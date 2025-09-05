@@ -1,10 +1,10 @@
 #include "global.h"
+#include "platform/io.h"
 #include "gpu_regs.h"
 
 #define GPU_REG_BUF_SIZE 0x60
 
 #define GPU_REG_BUF(offset) (*(u16 *)(&sGpuRegBuffer[offset]))
-#define GPU_REG(offset) (*(vu16 *)(REG_BASE + offset))
 
 #define EMPTY_SLOT 0xFF
 
@@ -37,12 +37,14 @@ static void CopyBufferedValueToGpuReg(u8 regOffset)
 {
     if (regOffset == REG_OFFSET_DISPSTAT)
     {
-        REG_DISPSTAT &= ~(DISPSTAT_HBLANK_INTR | DISPSTAT_VBLANK_INTR);
-        REG_DISPSTAT |= GPU_REG_BUF(REG_OFFSET_DISPSTAT);
+        u16 dispstat = PlatformReadReg(REG_OFFSET_DISPSTAT);
+        dispstat &= ~(DISPSTAT_HBLANK_INTR | DISPSTAT_VBLANK_INTR);
+        dispstat |= GPU_REG_BUF(REG_OFFSET_DISPSTAT);
+        PlatformWriteReg(REG_OFFSET_DISPSTAT, dispstat);
     }
     else
     {
-        GPU_REG(regOffset) = GPU_REG_BUF(regOffset);
+        PlatformWriteReg(regOffset, GPU_REG_BUF(regOffset));
     }
 }
 
@@ -70,9 +72,9 @@ void SetGpuReg(u8 regOffset, u16 value)
         u16 vcount;
 
         GPU_REG_BUF(regOffset) = value;
-        vcount = REG_VCOUNT & 0xFF;
+        vcount = PlatformReadReg(REG_OFFSET_VCOUNT) & 0xFF;
 
-        if ((vcount >= 161 && vcount <= 225) || (REG_DISPCNT & DISPCNT_FORCED_BLANK))
+        if ((vcount >= 161 && vcount <= 225) || (PlatformReadReg(REG_OFFSET_DISPCNT) & DISPCNT_FORCED_BLANK))
         {
             CopyBufferedValueToGpuReg(regOffset);
         }
@@ -103,7 +105,7 @@ void SetGpuReg_ForcedBlank(u8 regOffset, u16 value)
     {
         GPU_REG_BUF(regOffset) = value;
 
-        if (REG_DISPCNT & DISPCNT_FORCED_BLANK)
+        if (PlatformReadReg(REG_OFFSET_DISPCNT) & DISPCNT_FORCED_BLANK)
         {
             CopyBufferedValueToGpuReg(regOffset);
         }
@@ -131,10 +133,10 @@ void SetGpuReg_ForcedBlank(u8 regOffset, u16 value)
 u16 GetGpuReg(u8 regOffset)
 {
     if (regOffset == REG_OFFSET_DISPSTAT)
-        return REG_DISPSTAT;
+        return PlatformReadReg(REG_OFFSET_DISPSTAT);
 
     if (regOffset == REG_OFFSET_VCOUNT)
-        return REG_VCOUNT;
+        return PlatformReadReg(REG_OFFSET_VCOUNT);
 
     return GPU_REG_BUF(regOffset);
 }
@@ -155,10 +157,10 @@ static void SyncRegIE(void)
 {
     if (sShouldSyncRegIE)
     {
-        u16 temp = REG_IME;
-        REG_IME = 0;
-        REG_IE = sRegIE;
-        REG_IME = temp;
+        u16 temp = PlatformReadReg(REG_OFFSET_IME);
+        PlatformWriteReg(REG_OFFSET_IME, 0);
+        PlatformWriteReg(REG_OFFSET_IE, sRegIE);
+        PlatformWriteReg(REG_OFFSET_IME, temp);
         sShouldSyncRegIE = FALSE;
     }
 }

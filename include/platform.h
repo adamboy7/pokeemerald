@@ -8,6 +8,7 @@
 #define PLATFORM_GBA 0
 #else
 #define PLATFORM_GBA 1
+#define GBA
 #endif
 
 #endif // GUARD_PLATFORM_H

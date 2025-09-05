@@ -1,4 +1,5 @@
 #include "global.h"
+#include "platform/io.h"
 #include "crt0.h"
 #include "malloc.h"
 #include "link.h"
@@ -109,7 +110,7 @@ void AgbMain(void)
 #endif
     *(vu16 *)BG_PLTT = RGB_WHITE; // Set the backdrop to white on startup
     InitGpuRegManager();
-    REG_WAITCNT = WAITCNT_PREFETCH_ENABLE | WAITCNT_WS0_S_1 | WAITCNT_WS0_N_3;
+    PlatformWriteReg(REG_OFFSET_WAITCNT, WAITCNT_PREFETCH_ENABLE | WAITCNT_WS0_S_1 | WAITCNT_WS0_N_3);
     InitKeys();
     InitIntrHandlers();
     m4aSoundInit();
@@ -216,14 +217,14 @@ void SetMainCallback2(MainCallback callback)
 
 void StartTimer1(void)
 {
-    REG_TM1CNT_H = 0x80;
+    PlatformWriteReg(REG_OFFSET_TM1CNT_H, 0x80);
 }
 
 void SeedRngAndSetTrainerId(void)
 {
-    u16 val = REG_TM1CNT_L;
+    u16 val = PlatformReadReg(REG_OFFSET_TM1CNT_L);
     SeedRng(val);
-    REG_TM1CNT_H = 0;
+    PlatformWriteReg(REG_OFFSET_TM1CNT_H, 0);
     sTrainerId = val;
 }
 
@@ -263,7 +264,7 @@ void InitKeys(void)
 
 static void ReadKeys(void)
 {
-    u16 keyInput = REG_KEYINPUT ^ KEYS_MASK;
+    u16 keyInput = PlatformReadReg(REG_OFFSET_KEYINPUT) ^ KEYS_MASK;
     gMain.newKeysRaw = keyInput & ~gMain.heldKeysRaw;
     gMain.newKeys = gMain.newKeysRaw;
     gMain.newAndRepeatedKeys = gMain.newKeysRaw;
@@ -320,7 +321,7 @@ void InitIntrHandlers(void)
     SetHBlankCallback(NULL);
     SetSerialCallback(NULL);
 
-    REG_IME = 1;
+    PlatformWriteReg(REG_OFFSET_IME, 1);
 
     EnableInterrupts(INTR_FLAG_VBLANK);
 }
@@ -441,7 +442,7 @@ void ClearTrainerHillVBlankCounter(void)
 
 void DoSoftReset(void)
 {
-    REG_IME = 0;
+    PlatformWriteReg(REG_OFFSET_IME, 0);
     m4aSoundVSyncOff();
     ScanlineEffect_Stop();
     DmaStop(1);

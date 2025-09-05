@@ -345,6 +345,7 @@
 
 #define REG_ADDR_WAITCNT     (REG_BASE + REG_OFFSET_WAITCNT)
 
+#ifdef GBA
 // I/O registers
 
 #define REG_DISPCNT     (*(vu16 *)REG_ADDR_DISPCNT)
@@ -498,6 +499,8 @@
 #define REG_IF          (*(vu16 *)REG_ADDR_IF)
 
 #define REG_WAITCNT     (*(vu16 *)REG_ADDR_WAITCNT)
+
+#endif // GBA
 
 // I/O register fields
 
