@@ -1810,6 +1810,7 @@ struct PokemonCrySong gPokemonCrySong;
 u8 gMPlayMemAccArea[0x10];
 MPlayFunc gMPlayJumpTable[36];
 struct CgbChannel gCgbChans[4];
+ALIGNED(4) static char SoundMainRAM_Buffer[0x800] = {0};
 
 #ifdef USE_SDL
 static void SdlAudioCallback(void *userdata, Uint8 *stream, int len)

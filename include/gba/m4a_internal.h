@@ -188,7 +188,7 @@ struct SoundInfo
     // values during sensitive operations for locking purposes.
     // This field should be volatile but isn't. This could potentially cause
     // race conditions.
-    u32 ident;
+    volatile u32 ident;
 
     vu8 pcmDmaCounter;
 
@@ -348,7 +348,7 @@ struct MusicPlayerInfo
     u16 fadeOV;
     struct MusicPlayerTrack *tracks;
     struct ToneData *tone;
-    u32 ident;
+    volatile u32 ident;
     MPlayMainFunc MPlayMainNext;
     struct MusicPlayerInfo *musicPlayerNext;
 };
