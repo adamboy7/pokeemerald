@@ -225,8 +225,8 @@ OBJS_REL := $(patsubst $(OBJ_DIR)/%,%,$(OBJS))
 # Objects for the desktop PC build. Use the host compiler and include the
 # emulator BIOS and I/O stubs. Remove objects that rely on the GBA CPU.
 PC_OBJ_DIR := $(BUILD_DIR)/pc
-PC_OBJS := $(addprefix $(PC_OBJ_DIR)/,$(filter-out src/crt0.o src/libgcnmultiboot.o src/m4a.o src/m4a_1.o src/rom_header.o src/librfu_intr.o src/multiboot.o src/platform/io_stub.o,$(OBJS_REL)))
-PC_OBJS += $(PC_OBJ_DIR)/src/pc_bios.o $(PC_OBJ_DIR)/src/pc_main.o
+PC_OBJS := $(addprefix $(PC_OBJ_DIR)/,$(filter-out src/crt0.o src/libgcnmultiboot.o src/m4a.o src/m4a_1.o src/rom_header.o src/librfu_intr.o src/multiboot.o src/platform/io_stub.o src/pc_audio.o src/platform/io_pc.o,$(OBJS_REL)))
+PC_OBJS += $(PC_OBJ_DIR)/src/pc_bios.o $(PC_OBJ_DIR)/src/pc_main.o $(PC_OBJ_DIR)/src/pc_audio.o $(PC_OBJ_DIR)/src/platform/io_pc.o
 
 ifeq ($(OS),Windows_NT)
 AUDIO_LIBS := -lole32 -lwinmm $(shell pkg-config --libs sdl2)
