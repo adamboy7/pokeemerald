@@ -310,6 +310,10 @@ struct MusicPlayerTrack
     u32 unk_3C;
     u8 *cmdPtr;
     u8 *patternStack[3];
+#if PLATFORM_PC
+    s16 pitch;
+    u8 modDepth;
+#endif
 };
 
 #define MUSICPLAYER_STATUS_TRACK 0x0000ffff

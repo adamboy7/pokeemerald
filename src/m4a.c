@@ -1785,6 +1785,14 @@ void SetPokemonCryPriority(u8 val)
 
 #ifdef USE_SDL
 #include <SDL2/SDL.h>
+#include <stdlib.h>
+static SDL_AudioDeviceID sAudioDevice;
+// Guard shared audio state accessed from the audio callback.
+#define AUDIO_LOCK()   do { if (sAudioDevice != 0) SDL_LockAudioDevice(sAudioDevice); } while (0)
+#define AUDIO_UNLOCK() do { if (sAudioDevice != 0) SDL_UnlockAudioDevice(sAudioDevice); } while (0)
+#else
+#define AUDIO_LOCK()
+#define AUDIO_UNLOCK()
 #endif
 
 struct SoundInfo gSoundInfo;
@@ -1801,8 +1809,6 @@ MPlayFunc gMPlayJumpTable[36];
 struct CgbChannel gCgbChans[4];
 
 #ifdef USE_SDL
-static SDL_AudioDeviceID sAudioDevice;
-
 static void SdlAudioCallback(void *userdata, Uint8 *stream, int len)
 {
     (void)userdata;
@@ -1825,6 +1831,16 @@ static void SdlAudioCallback(void *userdata, Uint8 *stream, int len)
         stream += chunk;
         len -= chunk;
         soundInfo->pcmDmaCounter--;
+    }
+}
+
+static void m4aSoundShutdown(void)
+{
+    if (sAudioDevice != 0)
+    {
+        SDL_CloseAudioDevice(sAudioDevice);
+        sAudioDevice = 0;
+        SDL_Quit();
     }
 }
 #endif // USE_SDL
@@ -2005,11 +2021,13 @@ void m4aSoundVSyncOff(void)
 {
     struct SoundInfo *soundInfo = SOUND_INFO_PTR;
 
+    AUDIO_LOCK();
     if (soundInfo->ident >= ID_NUMBER && soundInfo->ident <= ID_NUMBER + 1)
     {
         soundInfo->ident += 10;
         CpuFill32(0, soundInfo->pcmBuffer, sizeof(soundInfo->pcmBuffer));
     }
+    AUDIO_UNLOCK();
 }
 
 void m4aSoundVSyncOn(void)
@@ -2017,24 +2035,34 @@ void m4aSoundVSyncOn(void)
     struct SoundInfo *soundInfo = SOUND_INFO_PTR;
     u32 ident = soundInfo->ident;
 
+    AUDIO_LOCK();
     if (ident == ID_NUMBER)
+    {
+        AUDIO_UNLOCK();
         return;
+    }
 
     soundInfo->pcmDmaCounter = 0;
     soundInfo->ident = ident - 10;
+    AUDIO_UNLOCK();
 }
 
 void m4aSoundVSync(void)
 {
     struct SoundInfo *soundInfo = SOUND_INFO_PTR;
 
+    AUDIO_LOCK();
     if (soundInfo->ident < ID_NUMBER || soundInfo->ident > ID_NUMBER + 1)
+    {
+        AUDIO_UNLOCK();
         return;
+    }
 
     if (soundInfo->pcmDmaCounter)
         soundInfo->pcmDmaCounter--;
     else
         soundInfo->pcmDmaCounter = soundInfo->pcmDmaPeriod;
+    AUDIO_UNLOCK();
 }
 
 void m4aSoundInit(void)
@@ -2069,7 +2097,12 @@ void m4aSoundInit(void)
     }
 
 #ifdef USE_SDL
-    SDL_Init(SDL_INIT_AUDIO);
+    if (SDL_Init(SDL_INIT_AUDIO) != 0)
+    {
+        SDL_Log("SDL_Init failed: %s", SDL_GetError());
+        return;
+    }
+
     SDL_AudioSpec want;
     SDL_zero(want);
     want.freq = gSoundInfo.pcmFreq;
@@ -2079,7 +2112,15 @@ void m4aSoundInit(void)
     want.callback = SdlAudioCallback;
 
     sAudioDevice = SDL_OpenAudioDevice(NULL, 0, &want, NULL, 0);
+    if (sAudioDevice == 0)
+    {
+        SDL_Log("SDL_OpenAudioDevice failed: %s", SDL_GetError());
+        SDL_Quit();
+        return;
+    }
+
     SDL_PauseAudioDevice(sAudioDevice, 0);
+    atexit(m4aSoundShutdown);
 #endif
 }
 
@@ -2090,8 +2131,12 @@ void m4aSoundMode(u32 mode)
     struct SoundInfo *soundInfo = SOUND_INFO_PTR;
     u32 temp;
 
+    AUDIO_LOCK();
     if (soundInfo->ident != ID_NUMBER)
+    {
+        AUDIO_UNLOCK();
         return;
+    }
 
     soundInfo->ident++;
 
@@ -2137,6 +2182,7 @@ void m4aSoundMode(u32 mode)
         SampleFreqSet(temp);
 
     soundInfo->ident = ID_NUMBER;
+    AUDIO_UNLOCK();
 }
 
 void m4aSongNumStart(u16 n)
