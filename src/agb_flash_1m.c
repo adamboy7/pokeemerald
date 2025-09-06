@@ -50,8 +50,6 @@ u16 IdentifyFlash(void)
     return result;
 }
 
-#endif // PLATFORM_GBA
-
 u16 WaitForFlashWrite_Common(u8 phase, u8 *addr, u8 lastData)
 {
     u16 result = 0;
