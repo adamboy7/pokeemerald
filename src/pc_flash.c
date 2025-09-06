@@ -1,13 +1,15 @@
-#include "global.h"
+#include "gba/gba.h"
 #include "save.h"
 #include "gba/flash_internal.h"
 #include "agb_flash.h"
 
 #ifdef PLATFORM_PC
+#include <errno.h>
+#include <limits.h>
 #include <stdio.h>
 #include <string.h>
 
-#define SAVE_FILE "pokeemerald.sav"
+static char sSaveFilePath[PATH_MAX] = "pokeemerald.sav";
 
 static u8 sFlashMemory[SECTORS_COUNT * SECTOR_SIZE];
 
@@ -27,26 +29,51 @@ static u16 ProgramFlashByte_PC(u16 sectorNum, u32 offset, u8 data);
 static u16 ProgramFlashSector_PC(u16 sectorNum, u8 *src);
 static u16 EraseFlashSector_PC(u16 sectorNum);
 
+void SetFlashFilePath(const char *path)
+{
+    if (path != NULL && path[0] != '\0')
+    {
+        strncpy(sSaveFilePath, path, sizeof(sSaveFilePath) - 1);
+        sSaveFilePath[sizeof(sSaveFilePath) - 1] = '\0';
+    }
+}
+
 static void FlushFlashMemory(void)
 {
-    FILE *file = fopen(SAVE_FILE, "wb");
-    if (file != NULL)
+    FILE *file = fopen(sSaveFilePath, "wb");
+    if (file == NULL)
     {
-        fwrite(sFlashMemory, 1, sizeof(sFlashMemory), file);
-        fclose(file);
+        perror("fopen");
+        return;
     }
+
+    if (fwrite(sFlashMemory, 1, sizeof(sFlashMemory), file) != sizeof(sFlashMemory))
+        perror("fwrite");
+
+    if (fclose(file) != 0)
+        perror("fclose");
 }
 
 static void LoadFlashMemory(void)
 {
-    FILE *file = fopen(SAVE_FILE, "rb");
+    FILE *file = fopen(sSaveFilePath, "rb");
     if (file != NULL)
     {
-        fread(sFlashMemory, 1, sizeof(sFlashMemory), file);
-        fclose(file);
+        size_t read = fread(sFlashMemory, 1, sizeof(sFlashMemory), file);
+        if (read != sizeof(sFlashMemory))
+        {
+            if (ferror(file))
+                perror("fread");
+            if (read < sizeof(sFlashMemory))
+                memset(sFlashMemory + read, 0xFF, sizeof(sFlashMemory) - read);
+        }
+        if (fclose(file) != 0)
+            perror("fclose");
     }
     else
     {
+        if (errno != ENOENT)
+            perror("fopen");
         memset(sFlashMemory, 0xFF, sizeof(sFlashMemory));
     }
 }
@@ -69,11 +96,20 @@ u16 IdentifyFlash(void)
 
 void ReadFlash(u16 sectorNum, u32 offset, u8 *dest, u32 size)
 {
+    if (sectorNum >= SECTORS_COUNT || offset + size > SECTOR_SIZE)
+    {
+        memset(dest, 0xFF, size);
+        return;
+    }
+
     memcpy(dest, sFlashMemory + sectorNum * SECTOR_SIZE + offset, size);
 }
 
 u16 ProgramFlashByte_PC(u16 sectorNum, u32 offset, u8 data)
 {
+    if (sectorNum >= SECTORS_COUNT || offset >= SECTOR_SIZE)
+        return 0x8000;
+
     sFlashMemory[sectorNum * SECTOR_SIZE + offset] = data;
     FlushFlashMemory();
     return 0;
@@ -81,6 +117,9 @@ u16 ProgramFlashByte_PC(u16 sectorNum, u32 offset, u8 data)
 
 u16 EraseFlashSector_PC(u16 sectorNum)
 {
+    if (sectorNum >= SECTORS_COUNT)
+        return 0x80FF;
+
     memset(sFlashMemory + sectorNum * SECTOR_SIZE, 0xFF, SECTOR_SIZE);
     FlushFlashMemory();
     return 0;
@@ -88,7 +127,17 @@ u16 EraseFlashSector_PC(u16 sectorNum)
 
 u16 ProgramFlashSector_PC(u16 sectorNum, u8 *src)
 {
-    memcpy(sFlashMemory + sectorNum * SECTOR_SIZE, src, SECTOR_SIZE);
+    if (sectorNum >= SECTORS_COUNT)
+        return 0x80FF;
+
+    gFlashNumRemainingBytes = SECTOR_SIZE;
+
+    for (u32 i = 0; i < SECTOR_SIZE; i++)
+    {
+        sFlashMemory[sectorNum * SECTOR_SIZE + i] = src[i];
+        gFlashNumRemainingBytes--;
+    }
+
     FlushFlashMemory();
     return 0;
 }
