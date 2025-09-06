@@ -1989,7 +1989,7 @@ static void CheckMasterOrSlave(void)
 {
     u32 terminals;
 
-    terminals = *(vu32 *)REG_ADDR_SIOCNT & (SIO_MULTI_SD | SIO_MULTI_SI);
+    terminals = READ_REG_U32(REG_OFFSET_SIOCNT) & (SIO_MULTI_SD | SIO_MULTI_SI);
     if (terminals == SIO_MULTI_SD && gLink.localId == 0)
     {
         gLink.isMaster = LINK_MASTER;
