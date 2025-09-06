@@ -2,6 +2,10 @@
 
 #ifndef GBA
 
+#ifdef PLATFORM_PC
+#include "m4a.h"
+#endif
+
 // NOTE: These are minimal desktop stubs for GBA BIOS syscalls.
 // TODO: Provide high-level implementations where appropriate.
 
@@ -208,50 +212,63 @@ __attribute__((weak)) u32 MidiKey2Freq(u8 key, u8 fractional, u8 octave)
     return 0;
 }
 
-__attribute__((weak)) void SoundDriverInit(void)
+void SoundDriverInit(void)
 {
-    // TODO: Initialize sound driver.
+#ifdef PLATFORM_PC
+    m4aSoundInit();
+#endif
 }
 
-__attribute__((weak)) void SoundDriverMain(void)
+void SoundDriverMain(void)
 {
-    // TODO: Run sound driver main routine.
+#ifdef PLATFORM_PC
+    m4aSoundMain();
+#endif
 }
 
-__attribute__((weak)) void SoundDriverVSync(void)
+void SoundDriverVSync(void)
 {
-    // TODO: Update sound driver during VBlank.
+#ifdef PLATFORM_PC
+    m4aSoundVSync();
+#endif
 }
 
-__attribute__((weak)) void SoundDriverVSyncOff(void)
+void SoundDriverVSyncOff(void)
 {
-    // TODO: Disable sound driver VBlank synchronization.
+#ifdef PLATFORM_PC
+    m4aSoundVSyncOff();
+#endif
 }
 
-__attribute__((weak)) void SoundDriverVSyncOn(void)
+void SoundDriverVSyncOn(void)
 {
-    // TODO: Enable sound driver VBlank synchronization.
+#ifdef PLATFORM_PC
+    m4aSoundVSyncOn();
+#endif
 }
 
-__attribute__((weak)) void SoundDriverMode(u32 mode)
+void SoundDriverMode(u32 mode)
 {
+#ifdef PLATFORM_PC
+    m4aSoundMode(mode);
+#else
     (void)mode;
-    // TODO: Configure sound driver mode.
+#endif
 }
 
-__attribute__((weak)) void SoundBiasSet(void)
+void SoundBiasSet(void)
 {
-    // TODO: Set sound bias register.
+    // No-op on PC.
 }
 
-__attribute__((weak)) void SoundBiasReset(void)
+void SoundBiasReset(void)
 {
-    // TODO: Reset sound bias register.
+    // No-op on PC.
 }
 
-__attribute__((weak)) void SoundBiasChange(void)
+void SoundBiasChange(void)
 {
-    // TODO: Gradually change sound bias.
+    // No-op on PC.
 }
 
 __attribute__((weak)) void MusicPlayerOpen(void)
