@@ -8,6 +8,9 @@ void m4aSoundVSyncOn(void);
 
 void m4aSoundInit(void);
 void m4aSoundMain(void);
+#if PLATFORM_PC
+void m4aSoundShutdown(void);
+#endif
 void m4aSongNumStart(u16 n);
 void m4aSongNumStartOrChange(u16 n);
 void m4aSongNumStop(u16 n);

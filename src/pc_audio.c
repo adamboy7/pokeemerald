@@ -87,7 +87,7 @@ static void SdlAudioCallback(void *userdata, Uint8 *stream, int len)
     }
 }
 
-static void m4aSoundShutdown(void)
+void m4aSoundShutdown(void)
 {
     if (sAudioDevice != 0)
     {
@@ -373,7 +373,6 @@ void m4aSoundInit(void)
     }
 
     SDL_PauseAudioDevice(sAudioDevice, 0);
-    atexit(m4aSoundShutdown);
 #endif
 }
 
