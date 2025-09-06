@@ -1783,6 +1783,7 @@ void SetPokemonCryPriority(u8 val)
 
 #else // PLATFORM_GBA
 
+#include <stdio.h>
 #ifdef USE_SDL
 #include <SDL2/SDL.h>
 #include <stdlib.h>
@@ -2194,7 +2195,15 @@ void m4aSoundMode(u32 mode)
 
     if (temp)
     {
-        // no-op on PC
+        u32 daBits = 17 - ((temp >> SOUND_MODE_DA_BIT_SHIFT) & 0xF);
+#if defined(USE_SDL)
+        SDL_Log("m4aSoundMode: requested %u-bit audio%s", daBits,
+                daBits == 8 ? "" : " (unsupported on PC)");
+#else
+        printf("m4aSoundMode: requested %u-bit audio%s\n", daBits,
+               daBits == 8 ? "" : " (unsupported on PC)");
+#endif
+        // The SDL backend always mixes at 8 bits, so other depths are ignored.
     }
 
     temp = mode & SOUND_MODE_FREQ;
