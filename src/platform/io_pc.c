@@ -9,8 +9,6 @@
 #include "gba/io_reg.h"
 #include "gba/defines.h"
 
-// Emulated I/O register space. Shared with the macros in io_reg.h.
-u8 gIoRegisters[0x400];
 
 #define DMA_CHANNELS 4
 #define TIMER_COUNT 4
@@ -131,7 +129,7 @@ static void PollInput(void)
         if (SDL_GameControllerGetButton(sController, SDL_CONTROLLER_BUTTON_LEFTSHOULDER)) state &= ~L_BUTTON;
     }
 
-    *(u16 *)(gIoRegisters + REG_OFFSET_KEYINPUT) = state;
+    WRITE_REG_U16(REG_OFFSET_KEYINPUT, state);
 }
 
 static inline u32 PlttColorToArgb(u16 color)
@@ -188,7 +186,7 @@ static void DrawRect(int x, int y, int w, int h, u32 color)
 
 static void Render(void)
 {
-    u16 dispcnt = *(u16 *)(gIoRegisters + REG_OFFSET_DISPCNT);
+    u16 dispcnt = READ_REG_U16(REG_OFFSET_DISPCNT);
     u16 *bgPltt = (u16 *)gPCPltt;
     u16 *objPltt = (u16 *)(gPCPltt + BG_PLTT_SIZE);
     static u8 sPriorityBuf[240 * 160];
@@ -211,7 +209,7 @@ static void Render(void)
             if (!(dispcnt & (DISPCNT_BG0_ON << bg)))
                 continue;
 
-            u16 bgcnt = *(u16 *)(gIoRegisters + REG_OFFSET_BG0CNT + bg * 2);
+            u16 bgcnt = READ_REG_U16(REG_OFFSET_BG0CNT + bg * 2);
             if ((bgcnt & 3) != prio)
                 continue;
 
@@ -222,8 +220,8 @@ static void Render(void)
             static const int sBgDimensions[4][2] = {{256,256},{512,256},{256,512},{512,512}};
             int width = sBgDimensions[screenSize][0];
             int height = sBgDimensions[screenSize][1];
-            u16 hofs = *(u16 *)(gIoRegisters + REG_OFFSET_BG0HOFS + bg * 8);
-            u16 vofs = *(u16 *)(gIoRegisters + REG_OFFSET_BG0VOFS + bg * 8);
+            u16 hofs = READ_REG_U16(REG_OFFSET_BG0HOFS + bg * 8);
+            u16 vofs = READ_REG_U16(REG_OFFSET_BG0VOFS + bg * 8);
             int tileSize = is8bpp ? 64 : 32;
 
             for (int y = 0; y < 160; y++)
@@ -383,9 +381,9 @@ static void UpdateDisplayState(void)
     double activeDur = lineDur * (240.0 / 308.0);
     u16 vcount = (u16)(lineIndex % 228);
 
-    *(u16 *)(gIoRegisters + REG_OFFSET_VCOUNT) = vcount;
+    WRITE_REG_U16(REG_OFFSET_VCOUNT, vcount);
 
-    u16 dispstat = *(u16 *)(gIoRegisters + REG_OFFSET_DISPSTAT);
+    u16 dispstat = READ_REG_U16(REG_OFFSET_DISPSTAT);
     u16 prev = sPrevDispstat;
     dispstat &= ~(DISPSTAT_VBLANK | DISPSTAT_HBLANK | DISPSTAT_VCOUNT);
     if (vcount >= 160)
@@ -394,18 +392,18 @@ static void UpdateDisplayState(void)
         dispstat |= DISPSTAT_HBLANK;
     if (vcount == (dispstat >> 8))
         dispstat |= DISPSTAT_VCOUNT;
-    *(u16 *)(gIoRegisters + REG_OFFSET_DISPSTAT) = dispstat;
+    WRITE_REG_U16(REG_OFFSET_DISPSTAT, dispstat);
 
     if ((dispstat & DISPSTAT_VBLANK) && !(prev & DISPSTAT_VBLANK))
     {
         if (dispstat & DISPSTAT_VBLANK_INTR)
-            *(u16 *)(gIoRegisters + REG_OFFSET_IF) |= INTR_FLAG_VBLANK;
+            WRITE_REG_U16(REG_OFFSET_IF, READ_REG_U16(REG_OFFSET_IF) | INTR_FLAG_VBLANK);
         TriggerFramebufferUpdate();
     }
     if ((dispstat & DISPSTAT_HBLANK) && !(prev & DISPSTAT_HBLANK) && (dispstat & DISPSTAT_HBLANK_INTR))
-        *(u16 *)(gIoRegisters + REG_OFFSET_IF) |= INTR_FLAG_HBLANK;
+        WRITE_REG_U16(REG_OFFSET_IF, READ_REG_U16(REG_OFFSET_IF) | INTR_FLAG_HBLANK);
     if ((dispstat & DISPSTAT_VCOUNT) && !(prev & DISPSTAT_VCOUNT) && (dispstat & DISPSTAT_VCOUNT_INTR))
-        *(u16 *)(gIoRegisters + REG_OFFSET_IF) |= INTR_FLAG_VCOUNT;
+        WRITE_REG_U16(REG_OFFSET_IF, READ_REG_U16(REG_OFFSET_IF) | INTR_FLAG_VCOUNT);
 
     sPrevDispstat = dispstat;
 }
@@ -431,7 +429,7 @@ static void UpdateTimers(void)
                 {
                     t->counter = t->reload + (value & 0xFFFF);
                     if (t->control & TIMER_INTR_ENABLE)
-                        *(u16 *)(gIoRegisters + REG_OFFSET_IF) |= (INTR_FLAG_TIMER0 << i);
+                        WRITE_REG_U16(REG_OFFSET_IF, READ_REG_U16(REG_OFFSET_IF) | (INTR_FLAG_TIMER0 << i));
                 }
                 else
                 {
@@ -440,8 +438,8 @@ static void UpdateTimers(void)
                 t->lastTick = now;
             }
         }
-        *(u16 *)(gIoRegisters + REG_OFFSET_TM0CNT_L + i * 4) = t->counter;
-        *(u16 *)(gIoRegisters + REG_OFFSET_TM0CNT_H + i * 4) = t->control;
+        WRITE_REG_U16(REG_OFFSET_TM0CNT_L + i * 4, t->counter);
+        WRITE_REG_U16(REG_OFFSET_TM0CNT_H + i * 4, t->control);
     }
 }
 
@@ -450,14 +448,14 @@ static void HandleDmas(void)
     for (int i = 0; i < DMA_CHANNELS; i++)
     {
         u32 base = REG_OFFSET_DMA0 + i * 12;
-        u16 control = *(u16 *)(gIoRegisters + base + 10);
+        u16 control = READ_REG_U16(base + 10);
         if (control & DMA_ENABLE)
         {
-            u32 src = *(u32 *)(gIoRegisters + base);
-            u32 dst = *(u32 *)(gIoRegisters + base + 4);
+            u32 src = READ_REG_U32(base);
+            u32 dst = READ_REG_U32(base + 4);
             u8 *srcPtr = (u8 *)(uintptr_t)src;
             u8 *dstPtr = (u8 *)(uintptr_t)dst;
-            u16 count = *(u16 *)(gIoRegisters + base + 8);
+            u16 count = READ_REG_U16(base + 8);
             u32 units = count;
             if (units == 0)
                 units = (i == 3) ? 0x10000 : 0x4000;
@@ -498,17 +496,17 @@ static void HandleDmas(void)
                 dstPtr += dstStep;
             }
 
-            *(u32 *)(gIoRegisters + base) = (u32)(uintptr_t)srcPtr;
-            *(u32 *)(gIoRegisters + base + 4) = (u32)(uintptr_t)dstPtr;
+            WRITE_REG_U32(base, (u32)(uintptr_t)srcPtr);
+            WRITE_REG_U32(base + 4, (u32)(uintptr_t)dstPtr);
 
             if (!(control & DMA_REPEAT))
             {
                 control &= ~DMA_ENABLE;
-                *(u16 *)(gIoRegisters + base + 10) = control;
+                WRITE_REG_U16(base + 10, control);
             }
 
             if (control & DMA_INTR_ENABLE)
-                *(u16 *)(gIoRegisters + REG_OFFSET_IF) |= (INTR_FLAG_DMA0 << i);
+                WRITE_REG_U16(REG_OFFSET_IF, READ_REG_U16(REG_OFFSET_IF) | (INTR_FLAG_DMA0 << i));
 
             TriggerFramebufferUpdate();
         }
@@ -537,7 +535,7 @@ u16 PlatformReadReg(u16 regOffset)
     case REG_OFFSET_TM3CNT_H:
         return sTimers[(regOffset - REG_OFFSET_TM0CNT_H) / 4].control;
     default:
-        return *(u16 *)(gIoRegisters + regOffset);
+        return READ_REG_U16(regOffset);
     }
 }
 
@@ -557,7 +555,7 @@ void PlatformWriteReg(u16 regOffset, u16 value)
         int idx = (regOffset - REG_OFFSET_TM0CNT_L) / 4;
         sTimers[idx].reload = value;
         sTimers[idx].counter = value;
-        *(u16 *)(gIoRegisters + regOffset) = value;
+        WRITE_REG_U16(regOffset, value);
         break;
     }
     case REG_OFFSET_TM0CNT_H:
@@ -567,7 +565,7 @@ void PlatformWriteReg(u16 regOffset, u16 value)
     {
         int idx = (regOffset - REG_OFFSET_TM0CNT_H) / 4;
         sTimers[idx].control = value;
-        *(u16 *)(gIoRegisters + regOffset) = value;
+        WRITE_REG_U16(regOffset, value);
         if (value & TIMER_ENABLE)
         {
             sTimers[idx].counter = sTimers[idx].reload;
@@ -576,10 +574,10 @@ void PlatformWriteReg(u16 regOffset, u16 value)
         break;
     }
     case REG_OFFSET_IF:
-        *(u16 *)(gIoRegisters + REG_OFFSET_IF) &= ~value;
+        WRITE_REG_U16(REG_OFFSET_IF, READ_REG_U16(REG_OFFSET_IF) & ~value);
         break;
     default:
-        *(u16 *)(gIoRegisters + regOffset) = value;
+        WRITE_REG_U16(regOffset, value);
         break;
     }
 

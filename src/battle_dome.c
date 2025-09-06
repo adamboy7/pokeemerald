@@ -5682,9 +5682,9 @@ static void VblankCb_TourneyInfoCard(void)
     TransferPlttBuffer();
 }
 
-#define SET_WIN0H_WIN1H(win0H, win1H)                       \
-{                                                           \
-    *(vu32*)(REG_ADDR_WIN0H) = ((win0H << 16) | (win1H));   \
+#define SET_WIN0H_WIN1H(win0H, win1H)                                       \
+{                                                                           \
+    WRITE_REG_U32(REG_OFFSET_WIN0H, ((win0H << 16) | (win1H)));             \
 }
 
 static void HblankCb_TourneyTree(void)

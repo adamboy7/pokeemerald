@@ -349,6 +349,8 @@
 
 #ifdef PLATFORM_PC
 extern u8 gIoRegisters[0x400];
+#undef REG_BASE
+#define REG_BASE gIoRegisters
 #define REG_IO_U8(offset)  (*(volatile u8  *)(gIoRegisters + (offset)))
 #define REG_IO_U16(offset) (*(volatile u16 *)(gIoRegisters + (offset)))
 #define REG_IO_U32(offset) (*(volatile u32 *)(gIoRegisters + (offset)))

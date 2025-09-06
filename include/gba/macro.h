@@ -54,13 +54,12 @@
 
 #define CpuFastCopy(src, dest, size) CpuFastSet(src, dest, ((size)/(32/8) & 0x1FFFFF))
 
-#define DmaSetUnchecked(dmaNum, src, dest, control) \
-{                                                 \
-    vu32 *dmaRegs = (vu32 *)REG_ADDR_DMA##dmaNum; \
-    dmaRegs[0] = (vu32)(src);                     \
-    dmaRegs[1] = (vu32)(dest);                    \
-    dmaRegs[2] = (vu32)(control);                 \
-    dmaRegs[2];                                   \
+#define DmaSetUnchecked(dmaNum, src, dest, control)                                   \
+{                                                                                    \
+    WRITE_REG_U32(REG_OFFSET_DMA##dmaNum##SAD, (u32)(src));                           \
+    WRITE_REG_U32(REG_OFFSET_DMA##dmaNum##DAD, (u32)(dest));                          \
+    WRITE_REG_U32(REG_OFFSET_DMA##dmaNum##CNT, (u32)(control));                       \
+    READ_REG_U32(REG_OFFSET_DMA##dmaNum##CNT);                                        \
 }
 
 #if MODERN
@@ -245,22 +244,22 @@
 #define DmaClear16Defvars(dmaNum, dest, size) DmaClearDefvars(dmaNum, dest, size, 16)
 #define DmaClear32Defvars(dmaNum, dest, size) DmaClearDefvars(dmaNum, dest, size, 32)
 
-#define DmaStop(dmaNum)                                         \
-{                                                               \
-    vu16 *dmaRegs = (vu16 *)REG_ADDR_DMA##dmaNum;               \
-    dmaRegs[5] &= ~(DMA_START_MASK | DMA_DREQ_ON | DMA_REPEAT); \
-    dmaRegs[5] &= ~DMA_ENABLE;                                  \
-    dmaRegs[5];                                                 \
+#define DmaStop(dmaNum)                                                                    \
+{                                                                                          \
+    u16 _control = READ_REG_U16(REG_OFFSET_DMA##dmaNum##CNT_H);                             \
+    _control &= ~(DMA_START_MASK | DMA_DREQ_ON | DMA_REPEAT | DMA_ENABLE);                  \
+    WRITE_REG_U16(REG_OFFSET_DMA##dmaNum##CNT_H, _control);                                 \
+    READ_REG_U16(REG_OFFSET_DMA##dmaNum##CNT_H);                                            \
 }
 
-#define IntrEnable(flags)                                       \
-{                                                               \
-    u16 imeTemp;                                                \
-                                                                \
-    imeTemp = REG_IME;                                          \
-    REG_IME = 0;                                                \
-    REG_IE |= flags;                                            \
-    REG_IME = imeTemp;                                          \
-}                                                               \
+#define IntrEnable(flags)                                                             \
+{                                                                                      \
+    u16 imeTemp;                                                                        \
+                                                                                       \
+    imeTemp = READ_REG_U16(REG_OFFSET_IME);                                            \
+    WRITE_REG_U16(REG_OFFSET_IME, 0);                                                  \
+    WRITE_REG_U16(REG_OFFSET_IE, READ_REG_U16(REG_OFFSET_IE) | (flags));               \
+    WRITE_REG_U16(REG_OFFSET_IME, imeTemp);                                            \
+}                                                                                      \
 
 #endif // GUARD_GBA_MACRO_H
