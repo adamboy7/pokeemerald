@@ -214,46 +214,32 @@ __attribute__((weak)) u32 MidiKey2Freq(u8 key, u8 fractional, u8 octave)
 
 void SoundDriverInit(void)
 {
-#ifdef PLATFORM_PC
     m4aSoundInit();
-#endif
 }
 
 void SoundDriverMain(void)
 {
-#ifdef PLATFORM_PC
     m4aSoundMain();
-#endif
 }
 
 void SoundDriverVSync(void)
 {
-#ifdef PLATFORM_PC
     m4aSoundVSync();
-#endif
 }
 
 void SoundDriverVSyncOff(void)
 {
-#ifdef PLATFORM_PC
     m4aSoundVSyncOff();
-#endif
 }
 
 void SoundDriverVSyncOn(void)
 {
-#ifdef PLATFORM_PC
     m4aSoundVSyncOn();
-#endif
 }
 
 void SoundDriverMode(u32 mode)
 {
-#ifdef PLATFORM_PC
     m4aSoundMode(mode);
-#else
-    (void)mode;
-#endif
 }
 
 void SoundBiasSet(void)
