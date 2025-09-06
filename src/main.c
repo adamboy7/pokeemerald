@@ -74,9 +74,9 @@ COMMON_DATA u32 IntrMain_Buffer[0x200] = {0};
 COMMON_DATA s8 gPcmDmaCounter = 0;
 
 #ifdef PC
-u8 *gPCVram;
-u8 *gPCPltt;
-u8 *gPCOam;
+u8 *gPCVram = NULL;
+u8 *gPCPltt = NULL;
+u8 *gPCOam = NULL;
 #endif
 
 static EWRAM_DATA u16 sTrainerId = 0;

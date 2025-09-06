@@ -69,6 +69,7 @@
 #define OAM      0x7000000
 #define OAM_SIZE 0x400
 #else
+// Pointers to runtime-allocated buffers for desktop builds
 extern u8 *gPCPltt;
 extern u8 *gPCVram;
 extern u8 *gPCOam;
