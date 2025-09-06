@@ -6,7 +6,7 @@ It builds the following ROM:
 
 * [**pokeemerald.gba**](https://datomatic.no-intro.org/index.php?page=show_record&s=23&n=1961) `sha1: f3ae088181bf583e55daf962a92bb46f4f1d07b7`
 
-You can also compile a minimal PC build with `make pc`, which uses the host compiler and includes `src/pc_bios.c`.
+You can also compile a minimal PC build with `make pc`, which uses the host compiler and includes `src/pc_bios.c`. This build outputs audio via SDL2; install SDL2 development libraries before building.
 
 To set up the repository, see [INSTALL.md](INSTALL.md).
 
