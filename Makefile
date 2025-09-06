@@ -198,7 +198,7 @@ endif
 # Collect sources
 C_SRCS_IN := $(wildcard $(C_SUBDIR)/*.c $(C_SUBDIR)/*/*.c $(C_SUBDIR)/*/*/*.c)
 C_SRCS := $(foreach src,$(C_SRCS_IN),$(if $(findstring .inc.c,$(src)),,$(src)))
-C_SRCS := $(filter-out $(C_SUBDIR)/pc_bios.c $(C_SUBDIR)/pc_io_reg.c,$(C_SRCS))
+C_SRCS := $(filter-out $(C_SUBDIR)/pc_bios.c $(C_SUBDIR)/pc_io_reg.c $(C_SUBDIR)/pc_main.c $(C_SUBDIR)/pc_m4a.c,$(C_SRCS))
 C_OBJS := $(patsubst $(C_SUBDIR)/%.c,$(C_BUILDDIR)/%.o,$(C_SRCS))
 
 C_ASM_SRCS := $(wildcard $(C_SUBDIR)/*.s $(C_SUBDIR)/*/*.s $(C_SUBDIR)/*/*/*.s)
@@ -222,6 +222,12 @@ MID_OBJS := $(patsubst $(MID_SUBDIR)/%.mid,$(MID_BUILDDIR)/%.o,$(MID_SRCS))
 OBJS     := $(C_OBJS) $(C_ASM_OBJS) $(ASM_OBJS) $(DATA_ASM_OBJS) $(SONG_OBJS) $(MID_OBJS)
 OBJS_REL := $(patsubst $(OBJ_DIR)/%,%,$(OBJS))
 
+# Objects for the desktop PC build. Use the host compiler and include the
+# emulator BIOS and I/O stubs. Remove objects that rely on the GBA CPU.
+PC_OBJ_DIR := $(BUILD_DIR)/pc
+PC_OBJS := $(addprefix $(PC_OBJ_DIR)/,$(filter-out src/crt0.o src/libgcnmultiboot.o src/m4a.o src/m4a_1.o src/rom_header.o src/librfu_intr.o src/multiboot.o,$(OBJS_REL)))
+PC_OBJS += $(PC_OBJ_DIR)/src/pc_bios.o $(PC_OBJ_DIR)/src/pc_io_reg.o $(PC_OBJ_DIR)/src/pc_main.o $(PC_OBJ_DIR)/src/pc_m4a.o
+
 SUBDIRS  := $(sort $(dir $(OBJS)))
 $(shell mkdir -p $(SUBDIRS))
 
@@ -229,11 +235,28 @@ $(shell mkdir -p $(SUBDIRS))
 modern: all
 compare: all
 
-pc: $(BUILD_DIR)/pc_bios
+# Build a desktop executable when PLATFORM_PC is defined.
+pc: $(BUILD_DIR)/pc/pokeemerald
 
-$(BUILD_DIR)/pc_bios: $(C_SUBDIR)/pc_bios.c
+$(BUILD_DIR)/pc/pokeemerald: $(PC_OBJS)
 	mkdir -p $(dir $@)
-	$(HOSTCC) -DPLATFORM_PC -DUSE_SDL $(shell sdl2-config --cflags 2>/dev/null) -I include $< -o $@ $(shell sdl2-config --libs 2>/dev/null || echo -lSDL2)
+	$(HOSTCC) $(PC_OBJS) $(shell sdl2-config --libs 2>/dev/null || echo -lSDL2) -lm -o $@
+
+# Compile C sources for the PC build.
+$(PC_OBJ_DIR)/%.o: %.c
+	mkdir -p $(dir $@)
+	$(HOSTCC) -DMODERN=$(MODERN) -DPLATFORM_PC -DUSE_SDL -D__INTELLISENSE__ $(shell sdl2-config --cflags 2>/dev/null) -I include -include gba/types.h -c $< -o $@
+
+# Convert MIDI files into objects for the PC build.
+$(PC_OBJ_DIR)/sound/songs/midi/%.o: sound/songs/midi/%.mid
+	mkdir -p $(dir $@)
+	$(PREPROC) $< charmap.txt | $(MID) -o $(PC_OBJ_DIR)/sound/songs/midi/$*.s -
+	$(HOSTCC) -DMODERN=$(MODERN) -DPLATFORM_PC -D__INTELLISENSE__ -x assembler-with-cpp -I include -c $(PC_OBJ_DIR)/sound/songs/midi/$*.s -o $@
+
+# Assemble data sources for the PC build.
+$(PC_OBJ_DIR)/%.o: %.s
+	mkdir -p $(dir $@)
+	$(HOSTCC) -DMODERN=$(MODERN) -DPLATFORM_PC -D__INTELLISENSE__ -x assembler-with-cpp -I include -c $< -o $@
 
 # Other rules
 rom: $(ROM)

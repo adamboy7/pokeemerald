@@ -3,6 +3,7 @@
 
 #include <string.h>
 #include <limits.h>
+#include <stdint.h>
 #include "config.h" // we need to define config before gba headers as print stuff needs the functions nulled before defines.
 #include "platform.h" // Select PC or GBA specific code paths
 #include "gba/gba.h"
@@ -112,13 +113,13 @@
 #define T1_READ_8(ptr)  ((ptr)[0])
 #define T1_READ_16(ptr) ((ptr)[0] | ((ptr)[1] << 8))
 #define T1_READ_32(ptr) ((ptr)[0] | ((ptr)[1] << 8) | ((ptr)[2] << 16) | ((ptr)[3] << 24))
-#define T1_READ_PTR(ptr) (u8 *) T1_READ_32(ptr)
+#define T1_READ_PTR(ptr) (u8 *)(uintptr_t)T1_READ_32(ptr)
 
 // T2_READ_8 is a duplicate to remain consistent with each group.
 #define T2_READ_8(ptr)  ((ptr)[0])
 #define T2_READ_16(ptr) ((ptr)[0] + ((ptr)[1] << 8))
 #define T2_READ_32(ptr) ((ptr)[0] + ((ptr)[1] << 8) + ((ptr)[2] << 16) + ((ptr)[3] << 24))
-#define T2_READ_PTR(ptr) (void *) T2_READ_32(ptr)
+#define T2_READ_PTR(ptr) (void *)(uintptr_t)T2_READ_32(ptr)
 
 #define PACK(data, shift, mask)   ( ((data) << (shift)) & (mask) )
 #define UNPACK(data, shift, mask) ( ((data) & (mask)) >> (shift) )
