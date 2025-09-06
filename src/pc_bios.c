@@ -5,19 +5,15 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
+#include <time.h>
+#ifdef USE_SDL
+#include <SDL2/SDL.h>
+#endif
 #include "m4a.h"
 
-// Parameters for BitUnPack. Matches the structure expected by the
-// corresponding GBA BIOS call.
-struct BitUnPackParams
-{
-    u16 srcLength;    // number of bytes in the packed source data
-    u8 srcBitNum;     // number of bits per source element
-    u8 destBitNum;    // number of bits per destination element
-    u32 destOffset:31;// value added to each decoded element
-    u32 offset0On:1;  // if set, add destOffset even when result is zero
-};
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 // Desktop implementations of a subset of the GBA BIOS calls. These aim to
 // emulate the behaviour of the real BIOS closely enough for engine bring-up
@@ -54,10 +50,15 @@ void IntrWait(u32 flags, u32 unused)
 {
     (void)flags;
     (void)unused;
-    // Simply wait for roughly one display frame. This mimics the
-    // blocking behaviour of the BIOS call without relying on actual
-    // interrupt hardware.
-    usleep(1000000 / 60);
+#ifdef USE_SDL
+    // Use SDL's timing facilities when available for portability.
+    SDL_Delay(1000 / 60);
+#else
+    // Approximate a single-frame wait using the standard C library.
+    clock_t start = clock();
+    clock_t duration = CLOCKS_PER_SEC / 60;
+    while (clock() - start < duration) { }
+#endif
 }
 
 void VBlankIntrWait(void)
