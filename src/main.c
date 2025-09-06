@@ -25,9 +25,6 @@
 #include "main.h"
 #include "trainer_hill.h"
 #include "constants/rgb.h"
-#ifdef PC
-#include <stdlib.h>
-#endif
 
 static void VBlankIntr(void);
 static void HBlankIntr(void);
@@ -103,11 +100,6 @@ void AgbMain(void)
 #if !MODERN
     RegisterRamReset(RESET_ALL);
 #endif //MODERN
-#ifdef PC
-    gPCVram = malloc(VRAM_SIZE);
-    gPCPltt = malloc(PLTT_SIZE);
-    gPCOam = malloc(OAM_SIZE);
-#endif
     *(vu16 *)BG_PLTT = RGB_WHITE; // Set the backdrop to white on startup
     InitGpuRegManager();
     PlatformWriteReg(REG_OFFSET_WAITCNT, WAITCNT_PREFETCH_ENABLE | WAITCNT_WS0_S_1 | WAITCNT_WS0_N_3);

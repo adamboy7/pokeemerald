@@ -5,6 +5,7 @@
 // This allows code to provide alternate implementations without breaking
 // the original hardware build.
 #ifdef PLATFORM_PC
+#define PC
 #define PLATFORM_GBA 0
 #else
 #define PLATFORM_GBA 1
