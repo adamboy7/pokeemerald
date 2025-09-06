@@ -4,6 +4,7 @@
 #include <math.h>
 #include <stddef.h>
 #include <unistd.h>
+#include "m4a.h"
 
 void *memcpy(void *dest, const void *src, size_t n);
 
@@ -195,27 +196,32 @@ s32 Div(s32 num, s32 denom)
 
 void SoundDriverInit(void)
 {
+    m4aSoundInit();
 }
 
 void SoundDriverMain(void)
 {
+    m4aSoundMain();
 }
 
 void SoundDriverVSync(void)
 {
+    m4aSoundVSync();
 }
 
 void SoundDriverVSyncOff(void)
 {
+    m4aSoundVSyncOff();
 }
 
 void SoundDriverVSyncOn(void)
 {
+    m4aSoundVSyncOn();
 }
 
 void SoundDriverMode(u32 mode)
 {
-    (void)mode;
+    m4aSoundMode(mode);
 }
 
 void SoundBiasReset(void)
