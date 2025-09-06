@@ -3,7 +3,7 @@
 #include "m4a.h"
 #include <stdlib.h>
 
-#ifdef PC
+#if PLATFORM_PC
 int main(void)
 {
     atexit(m4aSoundShutdown);

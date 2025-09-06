@@ -1,10 +1,8 @@
 #include "gba/gba.h"
 
-#ifndef GBA
+#if PLATFORM_PC
 
-#ifdef PLATFORM_PC
 #include "m4a.h"
-#endif
 
 // Desktop wrappers for BIOS sound driver calls. Other BIOS functions
 // are provided by src/pc_bios.c on non-GBA builds.
@@ -84,5 +82,5 @@ __attribute__((weak)) void SoundChannelClear(void)
     // Not implemented on desktop builds.
 }
 
-#endif // GBA
+#endif // PLATFORM_PC
 

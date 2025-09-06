@@ -5,7 +5,7 @@
 #include "gpu_regs.h"
 #include "task.h"
 #include "constants/rgb.h"
-#ifdef PC
+#if PLATFORM_PC
 #include <string.h>
 #endif
 
@@ -109,7 +109,7 @@ void TransferPlttBuffer(void)
     {
         void *src = gPlttBufferFaded;
         void *dest = (void *)PLTT;
-#ifdef PC
+#if PLATFORM_PC
         memcpy(dest, src, PLTT_SIZE);
 #else
         DmaCopy16(3, src, dest, PLTT_SIZE);
@@ -153,7 +153,7 @@ void ResetPaletteFade(void)
 static void ReadPlttIntoBuffers(void)
 {
     u16 *pltt = (u16 *)PLTT;
-#ifdef PC
+#if PLATFORM_PC
     memcpy(gPlttBufferUnfaded, pltt, PLTT_SIZE);
     memcpy(gPlttBufferFaded, pltt, PLTT_SIZE);
 #else

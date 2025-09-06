@@ -1,7 +1,7 @@
 #include "libgcnmultiboot.h"
 #include "gba/gba.h"
 
-#ifndef GBA
+#if PLATFORM_PC
 
 // Desktop stubs for GameCube multiboot routines.
 // TODO: Provide high-level implementation of GameCube link transfers.
@@ -43,4 +43,4 @@ void GameCubeMultiBoot_Quit(void)
     // TODO: Clean up multiboot session and restore state.
 }
 
-#endif // GBA
+#endif // PLATFORM_PC

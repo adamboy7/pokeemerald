@@ -6,7 +6,7 @@
 #define TRUE  1
 #define FALSE 0
 
-#ifdef PC
+#if PLATFORM_PC
 #define IWRAM_DATA static
 #define EWRAM_DATA static
 #define COMMON_DATA static
@@ -35,7 +35,7 @@
 #define IWRAM_START 0x03000000
 #define IWRAM_END   (IWRAM_START + 0x8000)
 
-#ifndef PC
+#if !PLATFORM_PC
 #define PLTT          0x5000000
 #define BG_PLTT       PLTT
 #define BG_PLTT_SIZE  0x200
