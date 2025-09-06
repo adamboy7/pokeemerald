@@ -1,7 +1,7 @@
 #include "global.h"
 #include "main.h"
 
-#ifdef PLATFORM_PC
+#ifdef PC
 int main(void)
 {
     AgbMain();
