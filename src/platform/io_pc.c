@@ -101,6 +101,8 @@ static void PollInput(void)
         }
     }
 
+    SDL_GameControllerUpdate();
+
     const Uint8 *keys = SDL_GetKeyboardState(NULL);
     u16 state = KEYS_MASK;
 
@@ -129,6 +131,7 @@ static void PollInput(void)
         if (SDL_GameControllerGetButton(sController, SDL_CONTROLLER_BUTTON_LEFTSHOULDER)) state &= ~L_BUTTON;
     }
 
+    // Update the emulated key input register
     WRITE_REG_U16(REG_OFFSET_KEYINPUT, state);
 }
 
@@ -356,7 +359,7 @@ static void Render(void)
     }
 }
 
-static void TriggerFramebufferUpdate(void)
+static void RenderAndPresent(void)
 {
     InitVideo();
     Render();
@@ -398,7 +401,7 @@ static void UpdateDisplayState(void)
     {
         if (dispstat & DISPSTAT_VBLANK_INTR)
             WRITE_REG_U16(REG_OFFSET_IF, READ_REG_U16(REG_OFFSET_IF) | INTR_FLAG_VBLANK);
-        TriggerFramebufferUpdate();
+        RenderAndPresent();
     }
     if ((dispstat & DISPSTAT_HBLANK) && !(prev & DISPSTAT_HBLANK) && (dispstat & DISPSTAT_HBLANK_INTR))
         WRITE_REG_U16(REG_OFFSET_IF, READ_REG_U16(REG_OFFSET_IF) | INTR_FLAG_HBLANK);
@@ -508,7 +511,7 @@ static void HandleDmas(void)
             if (control & DMA_INTR_ENABLE)
                 WRITE_REG_U16(REG_OFFSET_IF, READ_REG_U16(REG_OFFSET_IF) | (INTR_FLAG_DMA0 << i));
 
-            TriggerFramebufferUpdate();
+            RenderAndPresent();
         }
     }
 }
@@ -584,7 +587,7 @@ void PlatformWriteReg(u16 regOffset, u16 value)
     HandleDmas();
 
     if (regOffset <= REG_OFFSET_BLDY)
-        TriggerFramebufferUpdate();
+        RenderAndPresent();
 }
 #endif // PLATFORM_PC
 
