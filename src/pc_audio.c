@@ -93,7 +93,7 @@ static void m4aSoundShutdown(void)
     {
         SDL_CloseAudioDevice(sAudioDevice);
         sAudioDevice = 0;
-        SDL_Quit();
+        SDL_QuitSubSystem(SDL_INIT_AUDIO);
     }
 }
 #endif // USE_SDL
