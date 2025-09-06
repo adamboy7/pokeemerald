@@ -1,3 +1,5 @@
+#include "platform.h"
+#if PLATFORM_GBA
 #include "gba/gba.h"
 #include "gba/flash_internal.h"
 
@@ -294,3 +296,5 @@ u32 ProgramFlashSectorAndVerifyNBytes(u16 sectorNum, u8 *src, u32 n)
 
     return result;
 }
+
+#endif // PLATFORM_GBA

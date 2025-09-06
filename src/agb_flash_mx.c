@@ -1,3 +1,5 @@
+#include "platform.h"
+#if PLATFORM_GBA
 #include "gba/gba.h"
 #include "gba/flash_internal.h"
 
@@ -73,6 +75,7 @@ u16 EraseFlashChip_MX(void)
 
     return result;
 }
+
 
 u16 EraseFlashSector_MX(u16 sectorNum)
 {
@@ -191,3 +194,5 @@ u16 ProgramFlashSector_MX(u16 sectorNum, u8 *src)
 
     return result;
 }
+
+#endif // PLATFORM_GBA
