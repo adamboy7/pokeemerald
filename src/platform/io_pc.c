@@ -43,8 +43,11 @@ static void InitVideo(void)
         exit(1);
 
     sWindow = SDL_CreateWindow("pokeemerald", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-                               240, 160, 0);
+                               240, 160, SDL_WINDOW_RESIZABLE);
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
     sRenderer = SDL_CreateRenderer(sWindow, -1, SDL_RENDERER_ACCELERATED);
+    SDL_RenderSetLogicalSize(sRenderer, 240, 160);
+    SDL_RenderSetIntegerScale(sRenderer, SDL_TRUE);
     sTexture = SDL_CreateTexture(sRenderer, SDL_PIXELFORMAT_ARGB8888,
                                  SDL_TEXTUREACCESS_STREAMING, 240, 160);
 
