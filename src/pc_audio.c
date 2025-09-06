@@ -87,16 +87,20 @@ static void SdlAudioCallback(void *userdata, Uint8 *stream, int len)
     }
 }
 
+
+#endif // USE_SDL
+
 void m4aSoundShutdown(void)
 {
+#ifdef USE_SDL
     if (sAudioDevice != 0)
     {
         SDL_CloseAudioDevice(sAudioDevice);
         sAudioDevice = 0;
         SDL_QuitSubSystem(SDL_INIT_AUDIO);
     }
+#endif
 }
-#endif // USE_SDL
 
 u32 MidiKeyToFreq(struct WaveData *wav, u8 key, u8 fineAdjust)
 {
