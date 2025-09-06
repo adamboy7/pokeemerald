@@ -1,6 +1,6 @@
 #include "platform/io.h"
 
-#ifndef GBA
+#if PLATFORM_PC
 #define IO_REG_COUNT 0x400
 static u16 sIoRegs[IO_REG_COUNT / 2];
 
@@ -13,4 +13,4 @@ void PlatformWriteReg(u16 regOffset, u16 value)
 {
     sIoRegs[regOffset / 2] = value;
 }
-#endif // GBA
+#endif // PLATFORM_PC

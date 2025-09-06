@@ -14,7 +14,7 @@
 #define FSP_ON    0x01
 #define FSP_START 0x02
 
-#ifdef PC
+#if PLATFORM_PC
 LINK_MANAGER lman = {0};
 #else
 COMMON_DATA LINK_MANAGER lman = {0};
