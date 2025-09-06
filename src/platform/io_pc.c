@@ -32,6 +32,7 @@ static SDL_Renderer *sRenderer;
 static SDL_Texture *sTexture;
 static u32 sFramebuffer[240 * 160];
 static bool sShowSpriteBoxes;
+static SDL_GameController *sController;
 
 static void Render(void);
 
@@ -48,6 +49,17 @@ static void InitVideo(void)
     sRenderer = SDL_CreateRenderer(sWindow, -1, SDL_RENDERER_ACCELERATED);
     sTexture = SDL_CreateTexture(sRenderer, SDL_PIXELFORMAT_ARGB8888,
                                  SDL_TEXTUREACCESS_STREAMING, 240, 160);
+
+    // Open the first available controller so gamepad input can be mapped to
+    // REG_KEYINPUT alongside the keyboard state.
+    for (int i = 0; i < SDL_NumJoysticks(); i++)
+    {
+        if (SDL_IsGameController(i))
+        {
+            sController = SDL_GameControllerOpen(i);
+            break;
+        }
+    }
 }
 
 static void PresentFramebuffer(void)
@@ -75,6 +87,20 @@ static void PollInput(void)
             if (e.key.keysym.sym == SDLK_F1)
                 sShowSpriteBoxes = !sShowSpriteBoxes;
         }
+        if (e.type == SDL_CONTROLLERDEVICEADDED && sController == NULL)
+        {
+            if (SDL_IsGameController(e.cdevice.which))
+                sController = SDL_GameControllerOpen(e.cdevice.which);
+        }
+        if (e.type == SDL_CONTROLLERDEVICEREMOVED && sController != NULL)
+        {
+            SDL_JoystickID id = SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(sController));
+            if (id == e.cdevice.which)
+            {
+                SDL_GameControllerClose(sController);
+                sController = NULL;
+            }
+        }
     }
 
     const Uint8 *keys = SDL_GetKeyboardState(NULL);
@@ -90,6 +116,20 @@ static void PollInput(void)
     if (keys[SDL_SCANCODE_DOWN])   state &= ~DPAD_DOWN;
     if (keys[SDL_SCANCODE_S])      state &= ~R_BUTTON;
     if (keys[SDL_SCANCODE_A])      state &= ~L_BUTTON;
+
+    if (sController != NULL)
+    {
+        if (SDL_GameControllerGetButton(sController, SDL_CONTROLLER_BUTTON_A)) state &= ~A_BUTTON;
+        if (SDL_GameControllerGetButton(sController, SDL_CONTROLLER_BUTTON_B)) state &= ~B_BUTTON;
+        if (SDL_GameControllerGetButton(sController, SDL_CONTROLLER_BUTTON_BACK)) state &= ~SELECT_BUTTON;
+        if (SDL_GameControllerGetButton(sController, SDL_CONTROLLER_BUTTON_START)) state &= ~START_BUTTON;
+        if (SDL_GameControllerGetButton(sController, SDL_CONTROLLER_BUTTON_DPAD_RIGHT)) state &= ~DPAD_RIGHT;
+        if (SDL_GameControllerGetButton(sController, SDL_CONTROLLER_BUTTON_DPAD_LEFT)) state &= ~DPAD_LEFT;
+        if (SDL_GameControllerGetButton(sController, SDL_CONTROLLER_BUTTON_DPAD_UP)) state &= ~DPAD_UP;
+        if (SDL_GameControllerGetButton(sController, SDL_CONTROLLER_BUTTON_DPAD_DOWN)) state &= ~DPAD_DOWN;
+        if (SDL_GameControllerGetButton(sController, SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)) state &= ~R_BUTTON;
+        if (SDL_GameControllerGetButton(sController, SDL_CONTROLLER_BUTTON_LEFTSHOULDER)) state &= ~L_BUTTON;
+    }
 
     *(u16 *)(gIoRegisters + REG_OFFSET_KEYINPUT) = state;
 }
@@ -337,7 +377,11 @@ static void UpdateDisplayState(void)
     double seconds = (double)(now - sFrameStart) / (double)freq;
     double frameDur = 1.0 / 60.0;
     double lineDur = frameDur / 228.0;
-    u16 vcount = (u16)((int)(seconds / lineDur) % 228);
+    double lines = seconds / lineDur;
+    int lineIndex = (int)lines;
+    double lineTime = (lines - lineIndex) * lineDur;
+    double activeDur = lineDur * (240.0 / 308.0);
+    u16 vcount = (u16)(lineIndex % 228);
 
     *(u16 *)(gIoRegisters + REG_OFFSET_VCOUNT) = vcount;
 
@@ -346,6 +390,8 @@ static void UpdateDisplayState(void)
     dispstat &= ~(DISPSTAT_VBLANK | DISPSTAT_HBLANK | DISPSTAT_VCOUNT);
     if (vcount >= 160)
         dispstat |= DISPSTAT_VBLANK;
+    if (lineTime >= activeDur)
+        dispstat |= DISPSTAT_HBLANK;
     if (vcount == (dispstat >> 8))
         dispstat |= DISPSTAT_VCOUNT;
     *(u16 *)(gIoRegisters + REG_OFFSET_DISPSTAT) = dispstat;
@@ -356,6 +402,8 @@ static void UpdateDisplayState(void)
             *(u16 *)(gIoRegisters + REG_OFFSET_IF) |= INTR_FLAG_VBLANK;
         TriggerFramebufferUpdate();
     }
+    if ((dispstat & DISPSTAT_HBLANK) && !(prev & DISPSTAT_HBLANK) && (dispstat & DISPSTAT_HBLANK_INTR))
+        *(u16 *)(gIoRegisters + REG_OFFSET_IF) |= INTR_FLAG_HBLANK;
     if ((dispstat & DISPSTAT_VCOUNT) && !(prev & DISPSTAT_VCOUNT) && (dispstat & DISPSTAT_VCOUNT_INTR))
         *(u16 *)(gIoRegisters + REG_OFFSET_IF) |= INTR_FLAG_VCOUNT;
 
