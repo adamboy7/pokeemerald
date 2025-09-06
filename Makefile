@@ -228,6 +228,12 @@ PC_OBJ_DIR := $(BUILD_DIR)/pc
 PC_OBJS := $(addprefix $(PC_OBJ_DIR)/,$(filter-out src/crt0.o src/libgcnmultiboot.o src/m4a.o src/m4a_1.o src/rom_header.o src/librfu_intr.o src/multiboot.o,$(OBJS_REL)))
 PC_OBJS += $(PC_OBJ_DIR)/src/pc_bios.o $(PC_OBJ_DIR)/src/pc_io_reg.o $(PC_OBJ_DIR)/src/pc_main.o $(PC_OBJ_DIR)/src/pc_m4a.o
 
+ifeq ($(OS),Windows_NT)
+AUDIO_LIBS := -lole32 -lwinmm
+else
+AUDIO_LIBS := -lpthread -ldl
+endif
+
 SUBDIRS  := $(sort $(dir $(OBJS)))
 $(shell mkdir -p $(SUBDIRS))
 
@@ -240,12 +246,12 @@ pc: $(BUILD_DIR)/pc/pokeemerald
 
 $(BUILD_DIR)/pc/pokeemerald: $(PC_OBJS)
 	mkdir -p $(dir $@)
-	$(HOSTCC) $(PC_OBJS) $(shell sdl2-config --libs 2>/dev/null || echo -lSDL2) -lm -o $@
+	$(HOSTCC) $(PC_OBJS) $(AUDIO_LIBS) -lm -o $@
 
 # Compile C sources for the PC build.
 $(PC_OBJ_DIR)/%.o: %.c
 	mkdir -p $(dir $@)
-	$(HOSTCC) -DMODERN=$(MODERN) -DPLATFORM_PC -DUSE_SDL -D__INTELLISENSE__ $(shell sdl2-config --cflags 2>/dev/null) -I include -include gba/types.h -c $< -o $@
+	$(HOSTCC) -DMODERN=$(MODERN) -DPLATFORM_PC -D__INTELLISENSE__ -I include -include gba/types.h -c $< -o $@
 
 # Convert MIDI files into objects for the PC build.
 $(PC_OBJ_DIR)/sound/songs/midi/%.o: sound/songs/midi/%.mid
