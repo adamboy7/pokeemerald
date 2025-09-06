@@ -1824,32 +1824,43 @@ static void SdlAudioCallback(void *userdata, Uint8 *stream, int len)
 
         SoundMain();
 
-        int offset = (soundInfo->pcmDmaPeriod - soundInfo->pcmDmaCounter) * soundInfo->pcmSamplesPerVBlank;
-        int count = soundInfo->pcmSamplesPerVBlank * 2;
+        int offset = (soundInfo->pcmDmaPeriod - soundInfo->pcmDmaCounter) * soundInfo->pcmSamplesPerVBlank * 2;
+        int count = soundInfo->pcmSamplesPerVBlank;
 
         if (sAudioFormat == AUDIO_S16SYS)
+        {
+            if (count * 4 > len)
+                count = len / 4;
+
+            s8 *srcL = soundInfo->pcmBuffer + offset / 2;
+            s8 *srcR = soundInfo->pcmBuffer + PCM_DMA_BUF_SIZE + offset / 2;
+            Sint16 *dst = (Sint16 *)stream;
+
+            for (int i = 0; i < count; i++)
+            {
+                dst[2 * i] = srcL[i] << 8;
+                dst[2 * i + 1] = srcR[i] << 8;
+            }
+
+            stream += count * 4;
+            len -= count * 4;
+        }
+        else
         {
             if (count * 2 > len)
                 count = len / 2;
 
-            s8 *src = soundInfo->pcmBuffer + offset;
-            Sint16 *dst = (Sint16 *)stream;
+            s8 *srcL = soundInfo->pcmBuffer + offset / 2;
+            s8 *srcR = soundInfo->pcmBuffer + PCM_DMA_BUF_SIZE + offset / 2;
 
             for (int i = 0; i < count; i++)
-                dst[i] = src[i] << 8;
+            {
+                stream[2 * i] = srcL[i];
+                stream[2 * i + 1] = srcR[i];
+            }
 
             stream += count * 2;
             len -= count * 2;
-        }
-        else
-        {
-            if (count > len)
-                count = len;
-
-            SDL_memcpy(stream, soundInfo->pcmBuffer + offset, count);
-
-            stream += count;
-            len -= count;
         }
 
         soundInfo->pcmDmaCounter--;
