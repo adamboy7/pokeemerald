@@ -1,6 +1,7 @@
 #ifndef GUARD_PLATFORM_IO_H
 #define GUARD_PLATFORM_IO_H
 
+#include "platform.h"
 #include "gba/types.h"
 #include "gba/io_reg.h"
 
