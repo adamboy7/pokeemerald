@@ -8,6 +8,17 @@
 #include <unistd.h>
 #include "m4a.h"
 
+// Parameters for BitUnPack. Matches the structure expected by the
+// corresponding GBA BIOS call.
+struct BitUnPackParams
+{
+    u16 srcLength;    // number of bytes in the packed source data
+    u8 srcBitNum;     // number of bits per source element
+    u8 destBitNum;    // number of bits per destination element
+    u32 destOffset:31;// value added to each decoded element
+    u32 offset0On:1;  // if set, add destOffset even when result is zero
+};
+
 // Desktop implementations of a subset of the GBA BIOS calls. These aim to
 // emulate the behaviour of the real BIOS closely enough for engine bring-up
 // and unit testing on a PC.
@@ -231,6 +242,101 @@ void RLUnCompWram(const u32 *src, void *dest)
 void RLUnCompVram(const u32 *src, void *dest)
 {
     RLUnComp((const u8 *)src, dest);
+}
+
+// Huffman decompression is rarely used by the engine. A full
+// implementation would require replicating the BIOS Huffman tree
+// construction, which is beyond the needs of the desktop build.
+// Provide a stub so that links succeed should it ever be referenced.
+void HuffUnComp(const u8 *src, void *dest)
+{
+    (void)src;
+    (void)dest;
+}
+
+void BitUnPack(const void *src, void *dest, const struct BitUnPackParams *params)
+{
+    const u8 *s = src;
+    u8 *d = dest;
+    u32 srcBits = params->srcBitNum;
+    u32 destBits = params->destBitNum;
+    u32 mask = (1u << srcBits) - 1;
+    u32 destMask = (1u << destBits) - 1;
+    u32 add = params->destOffset;
+    bool32 addZero = params->offset0On;
+
+    u32 totalOut = (params->srcLength * 8) / srcBits;
+    u32 buffer = 0;
+    u32 bits = 0;
+
+    for (u32 i = 0; i < totalOut; i++)
+    {
+        while (bits < srcBits)
+        {
+            buffer |= (u32)(*s++) << bits;
+            bits += 8;
+        }
+
+        u32 value = buffer & mask;
+        buffer >>= srcBits;
+        bits -= srcBits;
+
+        if (value || addZero)
+            value = (value + add) & destMask;
+
+        if (destBits <= 8)
+        {
+            *d++ = value;
+        }
+        else
+        {
+            *(u16 *)d = value;
+            d += 2;
+        }
+    }
+}
+
+static void Diff8bitUnFilter(const u8 *src, u8 *dest)
+{
+    u32 header = *(const u32 *)src;
+    src += 4;
+    u32 remaining = header >> 8;
+    s16 prev = 0;
+
+    while (remaining--)
+    {
+        prev += (s8)(*src++);
+        *dest++ = (u8)prev;
+    }
+}
+
+void Diff8bitUnFilterWram(const void *src, void *dest)
+{
+    Diff8bitUnFilter(src, dest);
+}
+
+void Diff8bitUnFilterVram(const void *src, void *dest)
+{
+    Diff8bitUnFilter(src, dest);
+}
+
+void Diff16bitUnFilter(const void *src, void *dest)
+{
+    const u8 *s = src;
+    u16 *d = dest;
+    u32 header = *(const u32 *)s;
+    s += 4;
+    u32 remaining = header >> 8;
+    s32 prev = 0;
+
+    while (remaining)
+    {
+        s16 diff = (s16)(s[0] | (s[1] << 8));
+        s += 2;
+        prev += diff;
+        *d++ = (u16)prev;
+        remaining -= 2;
+    }
 }
 
 int MultiBoot(struct MultiBootParam *mp)
