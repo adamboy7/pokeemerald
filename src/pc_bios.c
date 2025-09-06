@@ -194,48 +194,6 @@ s32 Div(s32 num, s32 denom)
     return num / denom;
 }
 
-void SoundDriverInit(void)
-{
-    m4aSoundInit();
-}
-
-void SoundDriverMain(void)
-{
-    m4aSoundMain();
-}
-
-void SoundDriverVSync(void)
-{
-    m4aSoundVSync();
-}
-
-void SoundDriverVSyncOff(void)
-{
-    m4aSoundVSyncOff();
-}
-
-void SoundDriverVSyncOn(void)
-{
-    m4aSoundVSyncOn();
-}
-
-void SoundDriverMode(u32 mode)
-{
-    m4aSoundMode(mode);
-}
-
-void SoundBiasReset(void)
-{
-}
-
-void SoundBiasSet(void)
-{
-}
-
-void SoundBiasChange(void)
-{
-}
-
 #else
 #error "PLATFORM_PC must be defined"
 #endif // PLATFORM_PC
