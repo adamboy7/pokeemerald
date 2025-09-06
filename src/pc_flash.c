@@ -9,6 +9,10 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifndef PATH_MAX
+#define PATH_MAX 4096
+#endif
+
 static char sSaveFilePath[PATH_MAX] = "pokeemerald.sav";
 
 static u8 sFlashMemory[SECTORS_COUNT * SECTOR_SIZE];
