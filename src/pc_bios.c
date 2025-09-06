@@ -3,10 +3,10 @@
 #ifdef PLATFORM_PC
 #include <math.h>
 #include <stddef.h>
+#include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include "m4a.h"
-
-void *memcpy(void *dest, const void *src, size_t n);
 
 // Simple stubs for GBA BIOS calls when running on a desktop PC.
 // These provide minimal behaviour sufficient for bringing up the engine
@@ -15,22 +15,45 @@ void *memcpy(void *dest, const void *src, size_t n);
 void SoftReset(u32 resetFlags)
 {
     (void)resetFlags;
+    // On a PC build, a soft reset can be approximated by terminating
+    // the process. The launcher or invoking script is expected to
+    // restart the program if desired.
+    exit(0);
 }
 
 void RegisterRamReset(u32 resetFlags)
 {
-    (void)resetFlags;
+    // Only sound registers are handled explicitly. Other flags are
+    // ignored as they have no direct analogue on PC builds.
+    if (resetFlags & RESET_SOUND_REGS)
+        m4aSoundInit();
+}
+
+void IntrWait(u32 flags, u32 unused)
+{
+    (void)flags;
+    (void)unused;
+    // Simply wait for roughly one display frame. This mimics the
+    // blocking behaviour of the BIOS call without relying on actual
+    // interrupt hardware.
+    usleep(1000000 / 60);
 }
 
 void VBlankIntrWait(void)
 {
-    // Sleep roughly for one frame at 60Hz to simulate VBlank.
-    usleep(1000000 / 60);
+    IntrWait(0, 0);
 }
 
 u16 Sqrt(u32 num)
 {
     return (u16)sqrt((double)num);
+}
+
+u16 ArcTan(s16 x)
+{
+    // GBA ArcTan takes a fixed-point value where 256 represents 1.0.
+    double angle = atan((double)x / 256.0);
+    return (u16)(angle * 0x8000 / M_PI);
 }
 
 u16 ArcTan2(s16 x, s16 y)
@@ -43,44 +66,20 @@ u16 ArcTan2(s16 x, s16 y)
 
 void CpuSet(const void *src, void *dest, u32 control)
 {
+    // The real BIOS call supports various modes via the control
+    // parameter. For desktop builds we only need basic copying, so we
+    // ignore the flags and simply perform a memmove.
     size_t size = control & 0x1FFFFF; // lower 21 bits encode length
-    if (control & CPU_SET_SRC_FIXED)
-    {
-        if (control & CPU_SET_32BIT)
-        {
-            u32 value = *(const u32 *)src;
-            u32 *d = dest;
-            for (size_t i = 0; i < size / 4; i++)
-                d[i] = value;
-        }
-        else
-        {
-            u16 value = *(const u16 *)src;
-            u16 *d = dest;
-            for (size_t i = 0; i < size / 2; i++)
-                d[i] = value;
-        }
-    }
-    else
-    {
-        memcpy(dest, src, size);
-    }
+    memmove(dest, src, size);
 }
 
 void CpuFastSet(const void *src, void *dest, u32 control)
 {
+    // Like CpuSet, this simplified implementation just performs a
+    // regular memory move. The "fast" behaviour is irrelevant on
+    // modern CPUs.
     size_t size = control & 0x1FFFFF;
-    if (control & CPU_FAST_SET_SRC_FIXED)
-    {
-        u32 value = *(const u32 *)src;
-        u32 *d = dest;
-        for (size_t i = 0; i < size / 4; i++)
-            d[i] = value;
-    }
-    else
-    {
-        memcpy(dest, src, size);
-    }
+    memmove(dest, src, size);
 }
 
 void BgAffineSet(struct BgAffineSrcData *src, struct BgAffineDstData *dest, s32 count)
@@ -192,6 +191,13 @@ s32 Div(s32 num, s32 denom)
     if (denom == 0)
         return 0;
     return num / denom;
+}
+
+s32 Mod(s32 num, s32 denom)
+{
+    if (denom == 0)
+        return 0;
+    return num % denom;
 }
 
 #else
