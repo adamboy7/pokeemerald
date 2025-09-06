@@ -12,13 +12,17 @@
 #define RESET_ALL        0xFF
 
 void SoftReset(u32 resetFlags);
+void SoftResetRom(void);
+void SoftResetExram(void);
 
 void RegisterRamReset(u32 resetFlags);
 
+void IntrWait(u32 flags, u32 unused);
 void VBlankIntrWait(void);
 
 u16 Sqrt(u32 num);
 
+u16 ArcTan(s16 x);
 u16 ArcTan2(s16 x, s16 y);
 
 #define CPU_SET_SRC_FIXED 0x01000000
@@ -65,8 +69,29 @@ void RLUnCompWram(const u32 *src, void *dest);
 
 void RLUnCompVram(const u32 *src, void *dest);
 
+void HuffUnComp(const u8 *src, void *dest);
+
+struct BitUnPackParams
+{
+    u16 srcLength;
+    u8 srcBitNum;
+    u8 destBitNum;
+    u32 destOffset:31;
+    u32 offset0On:1;
+};
+void BitUnPack(const void *src, void *dest, const struct BitUnPackParams *params);
+
+void Diff8bitUnFilterWram(const void *src, void *dest);
+void Diff8bitUnFilterVram(const void *src, void *dest);
+void Diff16bitUnFilter(const void *src, void *dest);
+
 int MultiBoot(struct MultiBootParam *mp);
 
 s32 Div(s32 num, s32 denom);
+s32 Mod(s32 num, s32 denom);
+s32 DivArm(s32 num, s32 denom);
+s32 ModArm(s32 num, s32 denom);
+
+u32 MidiKey2Freq(u8 key, u8 fractional, u8 octave);
 
 #endif // GUARD_GBA_SYSCALL_H
