@@ -1788,6 +1788,8 @@ void SetPokemonCryPriority(u8 val)
 #include <SDL2/SDL.h>
 #include <stdlib.h>
 static SDL_AudioDeviceID sAudioDevice;
+// SDL audio format requested by m4aSoundMode.
+static SDL_AudioFormat sAudioFormat = AUDIO_S8;
 // Guard shared audio state accessed from the audio callback.
 #define AUDIO_LOCK()   do { if (sAudioDevice != 0) SDL_LockAudioDevice(sAudioDevice); } while (0)
 #define AUDIO_UNLOCK() do { if (sAudioDevice != 0) SDL_UnlockAudioDevice(sAudioDevice); } while (0)
@@ -1823,14 +1825,33 @@ static void SdlAudioCallback(void *userdata, Uint8 *stream, int len)
         SoundMain();
 
         int offset = (soundInfo->pcmDmaPeriod - soundInfo->pcmDmaCounter) * soundInfo->pcmSamplesPerVBlank;
-        int chunk = soundInfo->pcmSamplesPerVBlank * 2;
-        if (chunk > len)
-            chunk = len;
+        int count = soundInfo->pcmSamplesPerVBlank * 2;
 
-        SDL_memcpy(stream, soundInfo->pcmBuffer + offset, chunk);
+        if (sAudioFormat == AUDIO_S16SYS)
+        {
+            if (count * 2 > len)
+                count = len / 2;
 
-        stream += chunk;
-        len -= chunk;
+            s8 *src = soundInfo->pcmBuffer + offset;
+            Sint16 *dst = (Sint16 *)stream;
+
+            for (int i = 0; i < count; i++)
+                dst[i] = src[i] << 8;
+
+            stream += count * 2;
+            len -= count * 2;
+        }
+        else
+        {
+            if (count > len)
+                count = len;
+
+            SDL_memcpy(stream, soundInfo->pcmBuffer + offset, count);
+
+            stream += count;
+            len -= count;
+        }
+
         soundInfo->pcmDmaCounter--;
     }
 }
@@ -2107,7 +2128,7 @@ void m4aSoundInit(void)
     SDL_AudioSpec want;
     SDL_zero(want);
     want.freq = gSoundInfo.pcmFreq;
-    want.format = AUDIO_S8;
+    want.format = sAudioFormat;
     want.channels = 2;
     want.samples = gSoundInfo.pcmSamplesPerVBlank;
     want.callback = SdlAudioCallback;
@@ -2197,13 +2218,11 @@ void m4aSoundMode(u32 mode)
     {
         u32 daBits = 17 - ((temp >> SOUND_MODE_DA_BIT_SHIFT) & 0xF);
 #if defined(USE_SDL)
-        SDL_Log("m4aSoundMode: requested %u-bit audio%s", daBits,
-                daBits == 8 ? "" : " (unsupported on PC)");
+        sAudioFormat = (daBits == 16) ? AUDIO_S16SYS : AUDIO_S8;
+        SDL_Log("m4aSoundMode: requested %u-bit audio", daBits);
 #else
-        printf("m4aSoundMode: requested %u-bit audio%s\n", daBits,
-               daBits == 8 ? "" : " (unsupported on PC)");
+        printf("m4aSoundMode: requested %u-bit audio\n", daBits);
 #endif
-        // The SDL backend always mixes at 8 bits, so other depths are ignored.
     }
 
     temp = mode & SOUND_MODE_FREQ;
