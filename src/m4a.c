@@ -2124,7 +2124,28 @@ void m4aSoundInit(void)
 #endif
 }
 
-void m4aSoundMain(void) {}
+void m4aSoundMain(void)
+{
+#if defined(USE_SDL)
+    // When an SDL audio device is active, SoundMain is driven by the
+    // SdlAudioCallback. If the device failed to open, fall back to
+    // manually pumping SoundMain here.
+    if (sAudioDevice == 0)
+#endif
+    {
+        struct SoundInfo *soundInfo = SOUND_INFO_PTR;
+
+        AUDIO_LOCK();
+        SoundMain();
+
+        if (soundInfo->pcmDmaCounter)
+            soundInfo->pcmDmaCounter--;
+        else
+            soundInfo->pcmDmaCounter = soundInfo->pcmDmaPeriod;
+
+        AUDIO_UNLOCK();
+    }
+}
 
 void m4aSoundMode(u32 mode)
 {
