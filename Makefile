@@ -225,8 +225,8 @@ OBJS_REL := $(patsubst $(OBJ_DIR)/%,%,$(OBJS))
 # Objects for the desktop PC build. Use the host compiler and include the
 # emulator BIOS and I/O stubs. Remove objects that rely on the GBA CPU.
 PC_OBJ_DIR := $(BUILD_DIR)/pc
-PC_OBJS := $(addprefix $(PC_OBJ_DIR)/,$(filter-out src/crt0.o src/m4a.o src/m4a_1.o src/rom_header.o src/librfu_intr.o src/multiboot.o src/platform/io_stub.o src/pc_multiboot.o src/libgcnmultiboot.o src/siirtc.o,$(OBJS_REL)))
-PC_OBJS += $(PC_OBJ_DIR)/src/pc_bios.o $(PC_OBJ_DIR)/src/pc_main.o $(PC_OBJ_DIR)/src/pc_audio.o $(PC_OBJ_DIR)/src/pc_io_reg.o $(PC_OBJ_DIR)/src/pc_multiboot.o $(PC_OBJ_DIR)/src/pc_rtc.o $(PC_OBJ_DIR)/libagbsyscall/libagbsyscall.o
+PC_OBJS := $(addprefix $(PC_OBJ_DIR)/,$(filter-out src/crt0.o src/m4a.o src/m4a_1.o src/rom_header.o src/librfu_intr.o src/librfu_rfu.o src/librfu_sio32id.o src/librfu_stwi.o src/multiboot.o src/platform/io_stub.o src/pc_multiboot.o src/libgcnmultiboot.o src/siirtc.o,$(OBJS_REL)))
+PC_OBJS += $(PC_OBJ_DIR)/src/pc_bios.o $(PC_OBJ_DIR)/src/pc_main.o $(PC_OBJ_DIR)/src/pc_audio.o $(PC_OBJ_DIR)/src/pc_io_reg.o $(PC_OBJ_DIR)/src/pc_multiboot.o $(PC_OBJ_DIR)/src/pc_rtc.o $(PC_OBJ_DIR)/src/pc_m4a_stub.o $(PC_OBJ_DIR)/src/libgcnmultiboot.o $(PC_OBJ_DIR)/src/pc_stub.o $(PC_OBJ_DIR)/libagbsyscall/libagbsyscall.o
 PKG_CONFIG := $(shell which pkg-config 2>/dev/null)
 ifeq ($(PKG_CONFIG),)
   ifeq ($(SDL_CFLAGS),)
@@ -287,16 +287,18 @@ $(PC_OBJ_DIR)/sound/songs/midi/%.o: sound/songs/midi/%.mid
 	$(MID) $< $(PC_OBJ_DIR)/sound/songs/midi/$*.s
 	$(PREPROC) $(PC_OBJ_DIR)/sound/songs/midi/$*.s charmap.txt | \
 	$(CPP) $(INCLUDE_SCANINC_ARGS) -Isound -DMODERN=$(MODERN) -DPLATFORM_PC -DUSE_SDL -D__INTELLISENSE__ $(SDL_CFLAGS) - | \
-	$(PREPROC) -ie $(PC_OBJ_DIR)/sound/songs/midi/$*.s charmap.txt | \
-	$(HOSTCC) $(NO_PIE_CFLAGS) -c -x assembler -Wa,-Isound -o $@ -
+        $(PREPROC) -ie $(PC_OBJ_DIR)/sound/songs/midi/$*.s charmap.txt | \
+        sed 's/\\.word/\\.4byte/g' | \
+        $(HOSTCC) $(NO_PIE_CFLAGS) -c -x assembler -Wa,-Isound -o $@ -
 
 # Assemble data sources for the PC build.
 $(PC_OBJ_DIR)/%.o: %.s
 	mkdir -p $(dir $@)
 	$(PREPROC) $< charmap.txt | \
 	$(CPP) $(INCLUDE_SCANINC_ARGS) -Isound -DMODERN=$(MODERN) -DPLATFORM_PC -DUSE_SDL -D__INTELLISENSE__ $(SDL_CFLAGS) - | \
-	$(PREPROC) -ie $< charmap.txt | \
-	$(HOSTCC) $(NO_PIE_CFLAGS) -c -x assembler -Wa,-Isound -o $@ -
+        $(PREPROC) -ie $< charmap.txt | \
+        sed 's/\\.word/\\.4byte/g' | \
+        $(HOSTCC) $(NO_PIE_CFLAGS) -c -x assembler -Wa,-Isound -o $@ -
 
 # Other rules
 rom: $(ROM)
