@@ -236,6 +236,7 @@ static const u8 sUnusedData[] = {0x00, 0xFF, 0xFE, 0xFF, 0x00};
 
 bool8 IsWirelessAdapterConnected(void)
 {
+#if !PLATFORM_PC
     SetWirelessCommType1();
     InitRFUAPI();
     if (rfu_LMAN_REQBN_softReset_and_checkID() == RFU_ID)
@@ -247,6 +248,7 @@ bool8 IsWirelessAdapterConnected(void)
     SetWirelessCommType0_Internal();
     CloseLink();
     RestoreSerialTimer3IntrHandlers();
+#endif
     return FALSE;
 }
 
@@ -386,7 +388,9 @@ void OpenLink(void)
     }
     else
     {
+#if !PLATFORM_PC
         InitRFUAPI();
+#endif
     }
     gReceivedRemoteLinkPlayers = 0;
     for (i = 0; i < MAX_LINK_PLAYERS; i++)
@@ -1715,8 +1719,10 @@ static void CB2_PrintErrorMessage(void)
         {
             if (JOY_NEW(A_BUTTON))
             {
+#if !PLATFORM_PC
                 rfu_REQ_stopMode();
                 rfu_waitREQComplete();
+#endif
                 DoSoftReset();
             }
         }
