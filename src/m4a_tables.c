@@ -1,5 +1,7 @@
+#include "platform.h"
 #include "gba/m4a_internal.h"
 
+#if PLATFORM_GBA
 // Some of these functions have different signatures, so we need to make this
 // an array of void pointers or a struct. It's simpler to just make it an array
 // for now.
@@ -42,6 +44,7 @@ void *const gMPlayJumpTableTemplate[] =
     RealClearChain,
     SoundMainBTM,
 };
+#endif // PLATFORM_GBA
 
 // This is a table of deltas between sample values in compressed PCM data.
 const s8 gDeltaEncodingTable[] =
