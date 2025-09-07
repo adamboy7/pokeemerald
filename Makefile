@@ -271,14 +271,18 @@ $(PC_OBJ_DIR)/%.o: %.c
 $(PC_OBJ_DIR)/sound/songs/midi/%.o: sound/songs/midi/%.mid
 	mkdir -p $(dir $@)
 	$(PREPROC) $< charmap.txt | $(MID) -o $(PC_OBJ_DIR)/sound/songs/midi/$*.s -
-	$(HOSTCC) -DMODERN=$(MODERN) -DPLATFORM_PC -DUSE_SDL -D__INTELLISENSE__ -x assembler-with-cpp -I include \
-	$(SDL_CFLAGS) -c $(PC_OBJ_DIR)/sound/songs/midi/$*.s -o $@
+	$(PREPROC) $(PC_OBJ_DIR)/sound/songs/midi/$*.s charmap.txt | \
+	$(CPP) $(INCLUDE_SCANINC_ARGS) -DMODERN=$(MODERN) -DPLATFORM_PC -DUSE_SDL -D__INTELLISENSE__ $(SDL_CFLAGS) - | \
+	$(PREPROC) -ie $(PC_OBJ_DIR)/sound/songs/midi/$*.s charmap.txt | \
+	$(HOSTCC) -c -x assembler -o $@ -
 
 # Assemble data sources for the PC build.
 $(PC_OBJ_DIR)/%.o: %.s
 	mkdir -p $(dir $@)
-	$(HOSTCC) -DMODERN=$(MODERN) -DPLATFORM_PC -DUSE_SDL -D__INTELLISENSE__ -x assembler-with-cpp -I include \
-	$(SDL_CFLAGS) -c $< -o $@
+	$(PREPROC) $< charmap.txt | \
+	$(CPP) $(INCLUDE_SCANINC_ARGS) -DMODERN=$(MODERN) -DPLATFORM_PC -DUSE_SDL -D__INTELLISENSE__ $(SDL_CFLAGS) - | \
+	$(PREPROC) -ie $< charmap.txt | \
+	$(HOSTCC) -c -x assembler -o $@ -
 
 # Other rules
 rom: $(ROM)
