@@ -225,7 +225,7 @@ OBJS_REL := $(patsubst $(OBJ_DIR)/%,%,$(OBJS))
 # Objects for the desktop PC build. Use the host compiler and include the
 # emulator BIOS and I/O stubs. Remove objects that rely on the GBA CPU.
 PC_OBJ_DIR := $(BUILD_DIR)/pc
-PC_OBJS := $(addprefix $(PC_OBJ_DIR)/,$(filter-out src/crt0.o src/m4a.o src/m4a_1.o src/rom_header.o src/librfu_intr.o src/librfu_rfu.o src/librfu_sio32id.o src/librfu_stwi.o src/multiboot.o src/platform/io_stub.o src/pc_multiboot.o src/libgcnmultiboot.o src/siirtc.o src/AgbRfu_LinkManager.o src/link_rfu_2.o src/link_rfu_3.o src/trade.o src/union_room.o src/wireless_communication_status_screen.o,$(OBJS_REL)))
+PC_OBJS := $(addprefix $(PC_OBJ_DIR)/,$(filter-out src/crt0.o src/m4a.o src/m4a_1.o src/rom_header.o src/librfu_intr.o src/librfu_rfu.o src/librfu_sio32id.o src/librfu_stwi.o src/multiboot.o src/platform/io_stub.o src/pc_multiboot.o src/libgcnmultiboot.o src/siirtc.o src/AgbRfu_LinkManager.o src/link_rfu_2.o src/link_rfu_3.o,$(OBJS_REL)))
 PC_OBJS += $(PC_OBJ_DIR)/src/pc_bios.o $(PC_OBJ_DIR)/src/pc_main.o $(PC_OBJ_DIR)/src/pc_audio.o $(PC_OBJ_DIR)/src/pc_io_reg.o $(PC_OBJ_DIR)/src/pc_multiboot.o $(PC_OBJ_DIR)/src/pc_rtc.o $(PC_OBJ_DIR)/src/pc_m4a_stub.o $(PC_OBJ_DIR)/src/libgcnmultiboot.o $(PC_OBJ_DIR)/libagbsyscall/libagbsyscall.o
 PKG_CONFIG := $(shell which pkg-config 2>/dev/null)
 ifeq ($(PKG_CONFIG),)
