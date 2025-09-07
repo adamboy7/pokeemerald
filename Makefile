@@ -225,8 +225,7 @@ OBJS_REL := $(patsubst $(OBJ_DIR)/%,%,$(OBJS))
 # Objects for the desktop PC build. Use the host compiler and include the
 # emulator BIOS and I/O stubs. Remove objects that rely on the GBA CPU.
 PC_OBJ_DIR := $(BUILD_DIR)/pc
-PC_OBJS := $(addprefix $(PC_OBJ_DIR)/,$(filter-out src/crt0.o src/m4a.o src/m4a_1.o src/rom_header.o src/librfu_intr.o src/multiboot.o src/platform/io_stub.o src/pc_multiboot.o src/libgcnmultiboot.o,$(OBJS_REL)))
-PC_OBJS += $(PC_OBJ_DIR)/src/platform/io_pc.o
+PC_OBJS := $(addprefix $(PC_OBJ_DIR)/,$(filter-out src/crt0.o src/m4a.o src/m4a_1.o src/rom_header.o src/librfu_intr.o src/multiboot.o src/platform/io_stub.o src/pc_multiboot.o src/libgcnmultiboot.o src/siirtc.o,$(OBJS_REL)))
 PC_OBJS += $(PC_OBJ_DIR)/src/pc_bios.o $(PC_OBJ_DIR)/src/pc_main.o $(PC_OBJ_DIR)/src/pc_audio.o $(PC_OBJ_DIR)/src/pc_io_reg.o $(PC_OBJ_DIR)/src/pc_multiboot.o $(PC_OBJ_DIR)/src/pc_rtc.o $(PC_OBJ_DIR)/libagbsyscall/libagbsyscall.o
 PKG_CONFIG := $(shell which pkg-config 2>/dev/null)
 ifeq ($(PKG_CONFIG),)
@@ -247,6 +246,21 @@ else
 AUDIO_LIBS := -lpthread -ldl $(SDL_LIBS)
 endif
 
+# Determine flags to disable position-independent executables on non-Windows platforms.
+UNAME_S := $(shell uname -s 2>/dev/null)
+ifeq ($(OS),Windows_NT)
+NO_PIE_CFLAGS :=
+NO_PIE_LDFLAGS :=
+else
+  ifeq ($(UNAME_S),Darwin)
+    NO_PIE_CFLAGS := -fno-pie
+    NO_PIE_LDFLAGS := -Wl,-no_pie
+  else
+    NO_PIE_CFLAGS := -fno-pie
+    NO_PIE_LDFLAGS := -no-pie
+  endif
+endif
+
 SUBDIRS  := $(sort $(dir $(OBJS)))
 $(shell mkdir -p $(SUBDIRS))
 
@@ -259,13 +273,13 @@ pc: generated $(BUILD_DIR)/pc/pokeemerald
 
 $(BUILD_DIR)/pc/pokeemerald: $(PC_OBJS)
 	mkdir -p $(dir $@)
-	$(HOSTCC) $(PC_OBJS) $(AUDIO_LIBS) -lm -o $@
+	$(HOSTCC) $(PC_OBJS) $(AUDIO_LIBS) -lm $(NO_PIE_LDFLAGS) -o $@
 
 # Compile C sources for the PC build.
 $(PC_OBJ_DIR)/%.o: %.c
 	mkdir -p $(dir $@)
 	$(HOSTCC) -DMODERN=$(MODERN) -DPLATFORM_PC -DUSE_SDL -D__INTELLISENSE__ -I include -include gba/types.h \
-	$(SDL_CFLAGS) -c $< -o $@
+	$(SDL_CFLAGS) $(NO_PIE_CFLAGS) -c $< -o $@
 
 # Convert MIDI files into objects for the PC build.
 $(PC_OBJ_DIR)/sound/songs/midi/%.o: sound/songs/midi/%.mid
@@ -274,7 +288,7 @@ $(PC_OBJ_DIR)/sound/songs/midi/%.o: sound/songs/midi/%.mid
 	$(PREPROC) $(PC_OBJ_DIR)/sound/songs/midi/$*.s charmap.txt | \
 	$(CPP) $(INCLUDE_SCANINC_ARGS) -Isound -DMODERN=$(MODERN) -DPLATFORM_PC -DUSE_SDL -D__INTELLISENSE__ $(SDL_CFLAGS) - | \
 	$(PREPROC) -ie $(PC_OBJ_DIR)/sound/songs/midi/$*.s charmap.txt | \
-	$(HOSTCC) -c -x assembler -Wa,-Isound -o $@ -
+	$(HOSTCC) $(NO_PIE_CFLAGS) -c -x assembler -Wa,-Isound -o $@ -
 
 # Assemble data sources for the PC build.
 $(PC_OBJ_DIR)/%.o: %.s
@@ -282,7 +296,7 @@ $(PC_OBJ_DIR)/%.o: %.s
 	$(PREPROC) $< charmap.txt | \
 	$(CPP) $(INCLUDE_SCANINC_ARGS) -Isound -DMODERN=$(MODERN) -DPLATFORM_PC -DUSE_SDL -D__INTELLISENSE__ $(SDL_CFLAGS) - | \
 	$(PREPROC) -ie $< charmap.txt | \
-	$(HOSTCC) -c -x assembler -Wa,-Isound -o $@ -
+	$(HOSTCC) $(NO_PIE_CFLAGS) -c -x assembler -Wa,-Isound -o $@ -
 
 # Other rules
 rom: $(ROM)
