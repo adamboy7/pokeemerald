@@ -107,7 +107,9 @@ void AgbMain(void)
     InitIntrHandlers();
     m4aSoundInit();
     EnableVCountIntrAtLine150();
+#if !PLATFORM_PC
     InitRFU();
+#endif
     RtcInit();
     CheckForFlashMemory();
     InitMainCallbacks();
@@ -143,8 +145,10 @@ void AgbMain(void)
          && JOY_HELD_RAW(A_BUTTON)
          && JOY_HELD_RAW(B_START_SELECT) == B_START_SELECT)
         {
+#if !PLATFORM_PC
             rfu_REQ_stopMode();
             rfu_waitREQComplete();
+#endif
             DoSoftReset();
         }
 
