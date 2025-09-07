@@ -216,6 +216,7 @@ const u16 gTilesetAnims_Mauville_Flower2_Frame3[] = INCBIN_U16("data/tilesets/se
 const u16 gTilesetAnims_Mauville_Flower2_Frame4[] = INCBIN_U16("data/tilesets/secondary/mauville/anim/flower_2/4.4bpp");
 const u16 tileset_anims_space_1[16] = {};
 
+#if PLATFORM_GBA
 u16 *const gTilesetAnims_Mauville_Flower1_VDests[] = {
     (u16 *)(BG_VRAM + TILE_OFFSET_4BPP(NUM_TILES_IN_PRIMARY + 96)),
     (u16 *)(BG_VRAM + TILE_OFFSET_4BPP(NUM_TILES_IN_PRIMARY + 100)),
@@ -237,6 +238,10 @@ u16 *const gTilesetAnims_Mauville_Flower2_VDests[] = {
     (u16 *)(BG_VRAM + TILE_OFFSET_4BPP(NUM_TILES_IN_PRIMARY + 152)),
     (u16 *)(BG_VRAM + TILE_OFFSET_4BPP(NUM_TILES_IN_PRIMARY + 156))
 };
+#else
+u16 *gTilesetAnims_Mauville_Flower1_VDests[8];
+u16 *gTilesetAnims_Mauville_Flower2_VDests[8];
+#endif
 
 const u16 *const gTilesetAnims_Mauville_Flower1[] = {
     gTilesetAnims_Mauville_Flower1_Frame0,
@@ -291,6 +296,7 @@ const u16 gTilesetAnims_Rustboro_WindyWater_Frame5[] = INCBIN_U16("data/tilesets
 const u16 gTilesetAnims_Rustboro_WindyWater_Frame6[] = INCBIN_U16("data/tilesets/secondary/rustboro/anim/windy_water/6.4bpp");
 const u16 gTilesetAnims_Rustboro_WindyWater_Frame7[] = INCBIN_U16("data/tilesets/secondary/rustboro/anim/windy_water/7.4bpp");
 
+#if PLATFORM_GBA
 u16 *const gTilesetAnims_Rustboro_WindyWater_VDests[] = {
     (u16 *)(BG_VRAM + TILE_OFFSET_4BPP(NUM_TILES_IN_PRIMARY + 128)),
     (u16 *)(BG_VRAM + TILE_OFFSET_4BPP(NUM_TILES_IN_PRIMARY + 132)),
@@ -301,6 +307,9 @@ u16 *const gTilesetAnims_Rustboro_WindyWater_VDests[] = {
     (u16 *)(BG_VRAM + TILE_OFFSET_4BPP(NUM_TILES_IN_PRIMARY + 152)),
     (u16 *)(BG_VRAM + TILE_OFFSET_4BPP(NUM_TILES_IN_PRIMARY + 156))
 };
+#else
+u16 *gTilesetAnims_Rustboro_WindyWater_VDests[8];
+#endif
 
 const u16 *const gTilesetAnims_Rustboro_WindyWater[] = {
     gTilesetAnims_Rustboro_WindyWater_Frame0,
@@ -349,6 +358,7 @@ const u16 gTilesetAnims_EverGrande_Flowers_Frame6[] = INCBIN_U16("data/tilesets/
 const u16 gTilesetAnims_EverGrande_Flowers_Frame7[] = INCBIN_U16("data/tilesets/secondary/ever_grande/anim/flowers/7.4bpp");
 const u16 tileset_anims_space_4[16] = {};
 
+#if PLATFORM_GBA
 u16 *const gTilesetAnims_EverGrande_VDests[] = {
     (u16 *)(BG_VRAM + TILE_OFFSET_4BPP(NUM_TILES_IN_PRIMARY + 224)),
     (u16 *)(BG_VRAM + TILE_OFFSET_4BPP(NUM_TILES_IN_PRIMARY + 228)),
@@ -359,6 +369,9 @@ u16 *const gTilesetAnims_EverGrande_VDests[] = {
     (u16 *)(BG_VRAM + TILE_OFFSET_4BPP(NUM_TILES_IN_PRIMARY + 248)),
     (u16 *)(BG_VRAM + TILE_OFFSET_4BPP(NUM_TILES_IN_PRIMARY + 252))
 };
+#else
+u16 *gTilesetAnims_EverGrande_VDests[8];
+#endif
 
 const u16 *const gTilesetAnims_EverGrande_Flowers[] = {
     gTilesetAnims_EverGrande_Flowers_Frame0,
@@ -571,9 +584,27 @@ void TransferTilesetAnimsBuffer(void)
     sTilesetDMA3TransferBufferSize = 0;
 }
 
+#if PLATFORM_PC
+static void InitTilesetAnimVDestPtrs(void)
+{
+    int i;
+
+    for (i = 0; i < 8; i++)
+    {
+        gTilesetAnims_Mauville_Flower1_VDests[i] = (u16 *)(BG_VRAM + TILE_OFFSET_4BPP(NUM_TILES_IN_PRIMARY + 96 + i * 4));
+        gTilesetAnims_Mauville_Flower2_VDests[i] = (u16 *)(BG_VRAM + TILE_OFFSET_4BPP(NUM_TILES_IN_PRIMARY + 128 + i * 4));
+        gTilesetAnims_Rustboro_WindyWater_VDests[i] = (u16 *)(BG_VRAM + TILE_OFFSET_4BPP(NUM_TILES_IN_PRIMARY + 128 + i * 4));
+        gTilesetAnims_EverGrande_VDests[i] = (u16 *)(BG_VRAM + TILE_OFFSET_4BPP(NUM_TILES_IN_PRIMARY + 224 + i * 4));
+    }
+}
+#endif
+
 void InitTilesetAnimations(void)
 {
     ResetTilesetAnimBuffer();
+#if PLATFORM_PC
+    InitTilesetAnimVDestPtrs();
+#endif
     _InitPrimaryTilesetAnimation();
     _InitSecondaryTilesetAnimation();
 }
