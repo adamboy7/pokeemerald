@@ -3,8 +3,12 @@
 #include <string.h>
 
 #if PLATFORM_PC
-char gNumMusicPlayers = 4;
-char gMaxLines = 0;
+// When building the game for PC we need concrete storage for a few of
+// the symbols that are normally resolved by the GBA linker script. The
+// music player count and max lines are simple scalar values instead of
+// linker constants, so expose them as regular variables.
+u16 gNumMusicPlayers = 4;
+u32 gMaxLines = 0;
 char SoundMainRAM[0x800];
 
 void SoundMain(void) {}
