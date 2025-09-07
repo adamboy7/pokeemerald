@@ -274,7 +274,7 @@ $(PC_OBJ_DIR)/sound/songs/midi/%.o: sound/songs/midi/%.mid
 	$(PREPROC) $(PC_OBJ_DIR)/sound/songs/midi/$*.s charmap.txt | \
         $(CPP) $(INCLUDE_SCANINC_ARGS) -Isound -DMODERN=$(MODERN) -DPLATFORM_PC -DUSE_SDL -D__INTELLISENSE__ $(SDL_CFLAGS) - | \
 	$(PREPROC) -ie $(PC_OBJ_DIR)/sound/songs/midi/$*.s charmap.txt | \
-	$(HOSTCC) -c -x assembler -o $@ -
+	$(HOSTCC) -c -x assembler -Isound -o $@ -
 
 # Assemble data sources for the PC build.
 $(PC_OBJ_DIR)/%.o: %.s
@@ -282,7 +282,7 @@ $(PC_OBJ_DIR)/%.o: %.s
 	$(PREPROC) $< charmap.txt | \
         $(CPP) $(INCLUDE_SCANINC_ARGS) -Isound -DMODERN=$(MODERN) -DPLATFORM_PC -DUSE_SDL -D__INTELLISENSE__ $(SDL_CFLAGS) - | \
 	$(PREPROC) -ie $< charmap.txt | \
-	$(HOSTCC) -c -x assembler -o $@ -
+	$(HOSTCC) -c -x assembler -Isound -o $@ -
 
 # Other rules
 rom: $(ROM)
