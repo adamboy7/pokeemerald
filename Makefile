@@ -198,7 +198,7 @@ endif
 # Collect sources
 C_SRCS_IN := $(wildcard $(C_SUBDIR)/*.c $(C_SUBDIR)/*/*.c $(C_SUBDIR)/*/*/*.c)
 C_SRCS := $(foreach src,$(C_SRCS_IN),$(if $(findstring .inc.c,$(src)),,$(src)))
-C_SRCS := $(filter-out $(C_SUBDIR)/pc_bios.c $(C_SUBDIR)/pc_io_reg.c $(C_SUBDIR)/pc_main.c $(C_SUBDIR)/pc_audio.c $(C_SUBDIR)/pc_multiboot.c $(C_SUBDIR)/libgcnmultiboot.c,$(C_SRCS))
+C_SRCS := $(filter-out $(C_SUBDIR)/pc_bios.c $(C_SUBDIR)/pc_io_reg.c $(C_SUBDIR)/pc_main.c $(C_SUBDIR)/pc_audio.c $(C_SUBDIR)/pc_multiboot.c $(C_SUBDIR)/pc_rtc.c $(C_SUBDIR)/libgcnmultiboot.c,$(C_SRCS))
 C_OBJS := $(patsubst $(C_SUBDIR)/%.c,$(C_BUILDDIR)/%.o,$(C_SRCS))
 
 C_ASM_SRCS := $(wildcard $(C_SUBDIR)/*.s $(C_SUBDIR)/*/*.s $(C_SUBDIR)/*/*/*.s)
@@ -227,7 +227,7 @@ OBJS_REL := $(patsubst $(OBJ_DIR)/%,%,$(OBJS))
 PC_OBJ_DIR := $(BUILD_DIR)/pc
 PC_OBJS := $(addprefix $(PC_OBJ_DIR)/,$(filter-out src/crt0.o src/m4a.o src/m4a_1.o src/rom_header.o src/librfu_intr.o src/multiboot.o src/platform/io_stub.o src/pc_multiboot.o src/libgcnmultiboot.o,$(OBJS_REL)))
 PC_OBJS += $(PC_OBJ_DIR)/src/platform/io_pc.o
-PC_OBJS += $(PC_OBJ_DIR)/src/pc_bios.o $(PC_OBJ_DIR)/src/pc_main.o $(PC_OBJ_DIR)/src/pc_audio.o $(PC_OBJ_DIR)/src/pc_io_reg.o $(PC_OBJ_DIR)/src/pc_multiboot.o $(PC_OBJ_DIR)/libagbsyscall/libagbsyscall.o
+PC_OBJS += $(PC_OBJ_DIR)/src/pc_bios.o $(PC_OBJ_DIR)/src/pc_main.o $(PC_OBJ_DIR)/src/pc_audio.o $(PC_OBJ_DIR)/src/pc_io_reg.o $(PC_OBJ_DIR)/src/pc_multiboot.o $(PC_OBJ_DIR)/src/pc_rtc.o $(PC_OBJ_DIR)/libagbsyscall/libagbsyscall.o
 PKG_CONFIG := $(shell which pkg-config 2>/dev/null)
 ifeq ($(PKG_CONFIG),)
   ifeq ($(SDL_CFLAGS),)
