@@ -1,3 +1,4 @@
+#include "platform.h"
 #include "gba/m4a_internal.h"
 
 #if PLATFORM_GBA
