@@ -1,17 +1,18 @@
-	.macro create_movement_action name:req, value:req
-	.macro \name
-	.byte \value
-	.endm
-	.endm
+        .macro create_movement_action name:req, value:req
+        .macro \name
+        .byte \value
+        .endm
+        .endm
 
-	create_movement_action face_down, MOVEMENT_ACTION_FACE_DOWN
-	create_movement_action face_up, MOVEMENT_ACTION_FACE_UP
-	create_movement_action face_left, MOVEMENT_ACTION_FACE_LEFT
-	create_movement_action face_right, MOVEMENT_ACTION_FACE_RIGHT
-	create_movement_action walk_slow_down, MOVEMENT_ACTION_WALK_SLOW_DOWN
-	create_movement_action walk_slow_up, MOVEMENT_ACTION_WALK_SLOW_UP
-	create_movement_action walk_slow_left, MOVEMENT_ACTION_WALK_SLOW_LEFT
-	create_movement_action walk_slow_right, MOVEMENT_ACTION_WALK_SLOW_RIGHT
+#ifdef MOVEMENT_ACTION_FACE_DOWN
+        create_movement_action face_down, MOVEMENT_ACTION_FACE_DOWN
+        create_movement_action face_up, MOVEMENT_ACTION_FACE_UP
+        create_movement_action face_left, MOVEMENT_ACTION_FACE_LEFT
+        create_movement_action face_right, MOVEMENT_ACTION_FACE_RIGHT
+        create_movement_action walk_slow_down, MOVEMENT_ACTION_WALK_SLOW_DOWN
+        create_movement_action walk_slow_up, MOVEMENT_ACTION_WALK_SLOW_UP
+        create_movement_action walk_slow_left, MOVEMENT_ACTION_WALK_SLOW_LEFT
+        create_movement_action walk_slow_right, MOVEMENT_ACTION_WALK_SLOW_RIGHT
 	create_movement_action walk_down, MOVEMENT_ACTION_WALK_NORMAL_DOWN
 	create_movement_action walk_up, MOVEMENT_ACTION_WALK_NORMAL_UP
 	create_movement_action walk_left, MOVEMENT_ACTION_WALK_NORMAL_LEFT
@@ -163,4 +164,5 @@
 	create_movement_action fly_up, MOVEMENT_ACTION_FLY_UP
 	create_movement_action fly_down, MOVEMENT_ACTION_FLY_DOWN
 
-	create_movement_action step_end, MOVEMENT_ACTION_STEP_END
+        create_movement_action step_end, MOVEMENT_ACTION_STEP_END
+#endif

@@ -269,7 +269,7 @@ modern: all
 compare: all
 
 # Build a desktop executable when PLATFORM_PC is defined.
-SED_PC_CONV := sed -e 's/\\.word/\\.long/g' -e 's/\\.4byte/\\.long/g' -e 's/\\.2byte/\\.short/g'
+SED_PC_CONV := sed -e 's/\\.word/\\.long/g' -e 's/\\.4byte/\\.long/g' -e 's/\\.2byte/\\.short/g' -e 's/@.*//'
 pc: generated $(BUILD_DIR)/pc/pokeemerald
 
 $(BUILD_DIR)/pc/pokeemerald: $(PC_OBJS)
