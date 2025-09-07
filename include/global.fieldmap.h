@@ -95,7 +95,11 @@ struct ObjectEventTemplate
              //u16 padding2:8;
     /*0x0C*/ u16 trainerType;
     /*0x0E*/ u16 trainerRange_berryTreeId;
+#if defined(PLATFORM_PC)
+    /*0x10*/ u32 script; // Pointer stored as 32-bit on PC builds
+#else
     /*0x10*/ const u8 *script;
+#endif
     /*0x14*/ u16 flagId;
     /*0x16*/ //u8 padding3[2];
 };

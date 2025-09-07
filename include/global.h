@@ -603,7 +603,7 @@ struct Pokeblock
     u8 bitter;
     u8 sour;
     u8 feel;
-};
+} __attribute__((aligned(4)));
 
 struct Roamer
 {

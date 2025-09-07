@@ -2372,7 +2372,12 @@ void SetObjectEventDirection(struct ObjectEvent *objectEvent, u8 direction)
 
 static const u8 *GetObjectEventScriptPointerByLocalIdAndMap(u8 localId, u8 mapNum, u8 mapGroup)
 {
-    return GetObjectEventTemplateByLocalIdAndMap(localId, mapNum, mapGroup)->script;
+    const struct ObjectEventTemplate *template = GetObjectEventTemplateByLocalIdAndMap(localId, mapNum, mapGroup);
+#ifdef PLATFORM_PC
+    return (const u8 *)(uintptr_t)template->script;
+#else
+    return template->script;
+#endif
 }
 
 const u8 *GetObjectEventScriptPointerByObjectEventId(u8 objectEventId)
@@ -2493,7 +2498,13 @@ static void OverrideObjectEventTemplateScript(const struct ObjectEvent *objectEv
 
     objectEventTemplate = GetBaseTemplateForObjectEvent(objectEvent);
     if (objectEventTemplate)
+    {
+#ifdef PLATFORM_PC
+        objectEventTemplate->script = (u32)(uintptr_t)script;
+#else
         objectEventTemplate->script = script;
+#endif
+    }
 }
 
 void TryOverrideTemplateCoordsForObjectEvent(const struct ObjectEvent *objectEvent, u8 movementType)
