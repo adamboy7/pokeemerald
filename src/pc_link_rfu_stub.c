@@ -7,6 +7,12 @@ struct RfuManager gRfu;
 struct RfuGameData gHostRfuGameData;
 u8 gHostRfuUsername[RFU_USER_NAME_LENGTH];
 u8 gWirelessStatusIndicatorSpriteId;
+LINK_MANAGER lman;
+struct RfuLinkStatus gRfuLinkStatusStruct;
+struct RfuLinkStatus *gRfuLinkStatus = &gRfuLinkStatusStruct;
+struct RfuSlotStatusNI *gRfuSlotStatusNI[RFU_CHILD_MAX];
+u16 rfu_NI_setSendData(u8 bmSendSlot, u8 subFrameSize, const void *src, u32 size) { return 0; }
+u16 rfu_clearSlot(u8 connTypeFlag, u8 slotStatusIndex) { return 0; }
 
 #define STUB_VOID(name, args) void name args {}
 #define STUB_BOOL(name, args) bool8 name args { return FALSE; }

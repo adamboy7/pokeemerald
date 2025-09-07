@@ -1,4 +1,7 @@
 	.equ	W00,	0x80		@ WAIT
+#if PLATFORM_PC
+	.include "voicegroups/pc_voicegroup_offsets.inc"
+#endif
 	.equ	W01,	W00+1		@
 	.equ	W02,	W00+2		@
 	.equ	W03,	W00+3		@
