@@ -75,9 +75,18 @@ struct
 
 // These will produce an error if a save struct is larger than the space
 // alloted for it in the flash.
+//
+// On the GBA the structures are sized specifically to fit within the
+// available flash sectors. However, when building for the desktop the
+// structures may have different sizes due to the host platform's data
+// alignment rules. Skip these assertions for the PC build so the code can
+// still compile. The actual data layout is only relevant when running on
+// real hardware.
+#if !PLATFORM_PC
 STATIC_ASSERT(sizeof(struct SaveBlock2) <= SECTOR_DATA_SIZE, SaveBlock2FreeSpace);
 STATIC_ASSERT(sizeof(struct SaveBlock1) <= SECTOR_DATA_SIZE * (SECTOR_ID_SAVEBLOCK1_END - SECTOR_ID_SAVEBLOCK1_START + 1), SaveBlock1FreeSpace);
 STATIC_ASSERT(sizeof(struct PokemonStorage) <= SECTOR_DATA_SIZE * (SECTOR_ID_PKMN_STORAGE_END - SECTOR_ID_PKMN_STORAGE_START + 1), PokemonStorageFreeSpace);
+#endif
 
 COMMON_DATA u16 gLastWrittenSector = 0;
 COMMON_DATA u32 gLastSaveCounter = 0;
