@@ -270,19 +270,19 @@ $(PC_OBJ_DIR)/%.o: %.c
 # Convert MIDI files into objects for the PC build.
 $(PC_OBJ_DIR)/sound/songs/midi/%.o: sound/songs/midi/%.mid
 	mkdir -p $(dir $@)
-	$(PREPROC) $< charmap.txt | $(MID) -o $(PC_OBJ_DIR)/sound/songs/midi/$*.s -
+	$(MID) $< $(PC_OBJ_DIR)/sound/songs/midi/$*.s
 	$(PREPROC) $(PC_OBJ_DIR)/sound/songs/midi/$*.s charmap.txt | \
-        $(CPP) $(INCLUDE_SCANINC_ARGS) -Isound -DMODERN=$(MODERN) -DPLATFORM_PC -DUSE_SDL -D__INTELLISENSE__ $(SDL_CFLAGS) - | \
+	$(CPP) $(INCLUDE_SCANINC_ARGS) -Isound -DMODERN=$(MODERN) -DPLATFORM_PC -DUSE_SDL -D__INTELLISENSE__ $(SDL_CFLAGS) - | \
 	$(PREPROC) -ie $(PC_OBJ_DIR)/sound/songs/midi/$*.s charmap.txt | \
-	$(HOSTCC) -c -x assembler -o $@ -
+	$(HOSTCC) -c -x assembler -Wa,-Isound -o $@ -
 
 # Assemble data sources for the PC build.
 $(PC_OBJ_DIR)/%.o: %.s
 	mkdir -p $(dir $@)
 	$(PREPROC) $< charmap.txt | \
-        $(CPP) $(INCLUDE_SCANINC_ARGS) -Isound -DMODERN=$(MODERN) -DPLATFORM_PC -DUSE_SDL -D__INTELLISENSE__ $(SDL_CFLAGS) - | \
+	$(CPP) $(INCLUDE_SCANINC_ARGS) -Isound -DMODERN=$(MODERN) -DPLATFORM_PC -DUSE_SDL -D__INTELLISENSE__ $(SDL_CFLAGS) - | \
 	$(PREPROC) -ie $< charmap.txt | \
-	$(HOSTCC) -c -x assembler -o $@ -
+	$(HOSTCC) -c -x assembler -Wa,-Isound -o $@ -
 
 # Other rules
 rom: $(ROM)
