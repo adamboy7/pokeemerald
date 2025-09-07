@@ -407,8 +407,19 @@ extern const struct PokemonCrySong gPokemonCrySongTemplate;
 
 extern const struct ToneData voicegroup_dummy;
 
+// gNumMusicPlayers and gMaxLines are defined differently on the
+// GBA and the PC builds. On hardware these symbols are given constant
+// values by the linker script and are declared as arrays of char so that
+// their addresses evaluate to the desired numeric value when cast. For
+// the PC version we simply expose them as regular variables holding the
+// numeric values directly.
+#if PLATFORM_PC
+extern u16 gNumMusicPlayers;
+extern u32 gMaxLines;
+#else
 extern char gNumMusicPlayers[];
 extern char gMaxLines[];
+#endif
 
 #define NUM_MUSIC_PLAYERS ((u16)gNumMusicPlayers)
 #define MAX_LINES ((u32)gMaxLines)
