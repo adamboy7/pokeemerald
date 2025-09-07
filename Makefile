@@ -269,6 +269,7 @@ modern: all
 compare: all
 
 # Build a desktop executable when PLATFORM_PC is defined.
+SED_PC_CONV := sed -e 's/\\.word/\\.long/g' -e 's/\\.4byte/\\.long/g' -e 's/\\.2byte/\\.short/g'
 pc: generated $(BUILD_DIR)/pc/pokeemerald
 
 $(BUILD_DIR)/pc/pokeemerald: $(PC_OBJS)
@@ -288,8 +289,8 @@ $(PC_OBJ_DIR)/sound/songs/midi/%.o: sound/songs/midi/%.mid
 	$(PREPROC) $(PC_OBJ_DIR)/sound/songs/midi/$*.s charmap.txt | \
 	$(CPP) $(INCLUDE_SCANINC_ARGS) -Isound -DMODERN=$(MODERN) -DPLATFORM_PC -DUSE_SDL -D__INTELLISENSE__ $(SDL_CFLAGS) - | \
         $(PREPROC) -ie $(PC_OBJ_DIR)/sound/songs/midi/$*.s charmap.txt | \
-        sed 's/\\.word/\\.4byte/g' | \
-        $(HOSTCC) $(NO_PIE_CFLAGS) -c -x assembler -Wa,-Isound -o $@ -
+       $(SED_PC_CONV) | \
+       $(HOSTCC) $(NO_PIE_CFLAGS) -c -x assembler -Wa,-Isound -o $@ -
 
 # Assemble data sources for the PC build.
 $(PC_OBJ_DIR)/%.o: %.s
@@ -297,8 +298,8 @@ $(PC_OBJ_DIR)/%.o: %.s
 	$(PREPROC) $< charmap.txt | \
 	$(CPP) $(INCLUDE_SCANINC_ARGS) -Isound -DMODERN=$(MODERN) -DPLATFORM_PC -DUSE_SDL -D__INTELLISENSE__ $(SDL_CFLAGS) - | \
         $(PREPROC) -ie $< charmap.txt | \
-        sed 's/\\.word/\\.4byte/g' | \
-        $(HOSTCC) $(NO_PIE_CFLAGS) -c -x assembler -Wa,-Isound -o $@ -
+       $(SED_PC_CONV) | \
+       $(HOSTCC) $(NO_PIE_CFLAGS) -c -x assembler -Wa,-Isound -o $@ -
 
 # Other rules
 rom: $(ROM)
