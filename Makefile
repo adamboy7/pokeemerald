@@ -255,7 +255,7 @@ modern: all
 compare: all
 
 # Build a desktop executable when PLATFORM_PC is defined.
-pc: $(BUILD_DIR)/pc/pokeemerald
+pc: generated $(BUILD_DIR)/pc/pokeemerald
 
 $(BUILD_DIR)/pc/pokeemerald: $(PC_OBJS)
 	mkdir -p $(dir $@)
@@ -272,7 +272,7 @@ $(PC_OBJ_DIR)/sound/songs/midi/%.o: sound/songs/midi/%.mid
 	mkdir -p $(dir $@)
 	$(PREPROC) $< charmap.txt | $(MID) -o $(PC_OBJ_DIR)/sound/songs/midi/$*.s -
 	$(PREPROC) $(PC_OBJ_DIR)/sound/songs/midi/$*.s charmap.txt | \
-	$(CPP) $(INCLUDE_SCANINC_ARGS) -DMODERN=$(MODERN) -DPLATFORM_PC -DUSE_SDL -D__INTELLISENSE__ $(SDL_CFLAGS) - | \
+        $(CPP) $(INCLUDE_SCANINC_ARGS) -Isound -DMODERN=$(MODERN) -DPLATFORM_PC -DUSE_SDL -D__INTELLISENSE__ $(SDL_CFLAGS) - | \
 	$(PREPROC) -ie $(PC_OBJ_DIR)/sound/songs/midi/$*.s charmap.txt | \
 	$(HOSTCC) -c -x assembler -o $@ -
 
@@ -280,7 +280,7 @@ $(PC_OBJ_DIR)/sound/songs/midi/%.o: sound/songs/midi/%.mid
 $(PC_OBJ_DIR)/%.o: %.s
 	mkdir -p $(dir $@)
 	$(PREPROC) $< charmap.txt | \
-	$(CPP) $(INCLUDE_SCANINC_ARGS) -DMODERN=$(MODERN) -DPLATFORM_PC -DUSE_SDL -D__INTELLISENSE__ $(SDL_CFLAGS) - | \
+        $(CPP) $(INCLUDE_SCANINC_ARGS) -Isound -DMODERN=$(MODERN) -DPLATFORM_PC -DUSE_SDL -D__INTELLISENSE__ $(SDL_CFLAGS) - | \
 	$(PREPROC) -ie $< charmap.txt | \
 	$(HOSTCC) -c -x assembler -o $@ -
 
