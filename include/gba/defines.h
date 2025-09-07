@@ -7,9 +7,9 @@
 #define FALSE 0
 
 #if PLATFORM_PC
-#define IWRAM_DATA static
-#define EWRAM_DATA static
-#define COMMON_DATA static
+#define IWRAM_DATA
+#define EWRAM_DATA
+#define COMMON_DATA
 #define UNUSED __attribute__((unused))
 #else
 #define IWRAM_DATA __attribute__((section("iwram_data")))
