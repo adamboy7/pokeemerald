@@ -1,5 +1,5 @@
+#include "global.h"
 #include "libgcnmultiboot.h"
-#include "gba/gba.h"
 
 #if PLATFORM_PC
 
