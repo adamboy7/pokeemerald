@@ -269,7 +269,17 @@ modern: all
 compare: all
 
 # Build a desktop executable when PLATFORM_PC is defined.
-SED_PC_CONV := sed -e 's/\\.word/\\.long/g' -e 's/\\.4byte/\\.long/g' -e 's/\\.2byte/\\.short/g' -e 's/@.*$$//'
+# Convert ARM-ish directives to x86 GAS and safely strip ARM '@' comments
+# without destroying GAS macro tokens like '\@' (unique-id in macros).
+SED_PC_CONV := sed \
+  -e 's/\.word/\.long/g' \
+  -e 's/\.4byte/\.long/g' \
+  -e 's/\.2byte/\.short/g' \
+  -e 's/\\@/__GAS_MACRO_AT__/g' \
+  -e 's/^[[:space:]]*@.*$$//' \
+  -e 's/[[:space:]]@.*$$//' \
+  -e 's/__GAS_MACRO_AT__/\\@/g'
+
 pc: generated $(BUILD_DIR)/pc/pokeemerald
 
 $(BUILD_DIR)/pc/pokeemerald: $(PC_OBJS)
