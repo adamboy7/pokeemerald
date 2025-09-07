@@ -24,4 +24,19 @@ void ply_mod(struct MusicPlayerInfo *mplayInfo, struct MusicPlayerTrack *track) 
 void ply_xcmd(struct MusicPlayerInfo *mplayInfo, struct MusicPlayerTrack *track) {}
 void ply_endtie(struct MusicPlayerInfo *mplayInfo, struct MusicPlayerTrack *track) {}
 void ply_note(u32 note_cmd, struct MusicPlayerInfo *mplayInfo, struct MusicPlayerTrack *track) {}
+void ply_xxx(struct MusicPlayerInfo *mplayInfo, struct MusicPlayerTrack *track) {}
+void ply_xwave(struct MusicPlayerInfo *mplayInfo, struct MusicPlayerTrack *track) {}
+void ply_xtype(struct MusicPlayerInfo *mplayInfo, struct MusicPlayerTrack *track) {}
+void ply_xatta(struct MusicPlayerInfo *mplayInfo, struct MusicPlayerTrack *track) {}
+void ply_xdeca(struct MusicPlayerInfo *mplayInfo, struct MusicPlayerTrack *track) {}
+void ply_xsust(struct MusicPlayerInfo *mplayInfo, struct MusicPlayerTrack *track) {}
+void ply_xrele(struct MusicPlayerInfo *mplayInfo, struct MusicPlayerTrack *track) {}
+void ply_xiecv(struct MusicPlayerInfo *mplayInfo, struct MusicPlayerTrack *track) {}
+void ply_xiecl(struct MusicPlayerInfo *mplayInfo, struct MusicPlayerTrack *track) {}
+void ply_xleng(struct MusicPlayerInfo *mplayInfo, struct MusicPlayerTrack *track) {}
+void ply_xswee(struct MusicPlayerInfo *mplayInfo, struct MusicPlayerTrack *track) {}
+void ply_xcmd_0C(struct MusicPlayerInfo *mplayInfo, struct MusicPlayerTrack *track) {}
+void ply_xcmd_0D(struct MusicPlayerInfo *mplayInfo, struct MusicPlayerTrack *track) {}
+bool32 IsPokemonCryPlaying(struct MusicPlayerInfo *mplayInfo) { return FALSE; }
+u32 umul3232H32(u32 multiplier, u32 multiplicand) { return (u32)(((u64)multiplier * multiplicand) >> 32); }
 #endif
