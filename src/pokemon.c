@@ -2338,12 +2338,46 @@ void CreateBoxMon(struct BoxPokemon *boxMon, u16 species, u8 level, u8 fixedIV, 
 void CreateMonWithNature(struct Pokemon *mon, u16 species, u8 level, u8 fixedIV, u8 nature)
 {
     u32 personality;
+#ifdef REROLL_SHINY
+    s32 shinyRerolls = REROLL_SHINY;
+#else
+    s32 shinyRerolls = 1;
+#endif
+    u32 otId = gSaveBlock2Ptr->playerTrainerId[0]
+             | (gSaveBlock2Ptr->playerTrainerId[1] << 8)
+             | (gSaveBlock2Ptr->playerTrainerId[2] << 16)
+             | (gSaveBlock2Ptr->playerTrainerId[3] << 24);
 
     do
     {
         personality = Random32();
-    }
-    while (nature != GetNatureFromPersonality(personality));
+
+        if (nature != GetNatureFromPersonality(personality))
+            continue;
+
+        if (shinyRerolls != 1)
+        {
+            bool32 isShiny = IsShinyOtIdPersonality(otId, personality);
+
+            if (shinyRerolls == 0)
+            {
+                if (isShiny)
+                    continue;
+            }
+            else if (shinyRerolls < 0)
+            {
+                if (!isShiny)
+                    continue;
+            }
+            else
+            {
+                if (!isShiny && --shinyRerolls > 0)
+                    continue;
+            }
+        }
+
+        break;
+    } while (TRUE);
 
     CreateMon(mon, species, level, fixedIV, TRUE, personality, OT_ID_PLAYER_ID, 0);
 }
@@ -2351,6 +2385,15 @@ void CreateMonWithNature(struct Pokemon *mon, u16 species, u8 level, u8 fixedIV,
 void CreateMonWithGenderNatureLetter(struct Pokemon *mon, u16 species, u8 level, u8 fixedIV, u8 gender, u8 nature, u8 unownLetter)
 {
     u32 personality;
+#ifdef REROLL_SHINY
+    s32 shinyRerolls = REROLL_SHINY;
+#else
+    s32 shinyRerolls = 1;
+#endif
+    u32 otId = gSaveBlock2Ptr->playerTrainerId[0]
+             | (gSaveBlock2Ptr->playerTrainerId[1] << 8)
+             | (gSaveBlock2Ptr->playerTrainerId[2] << 16)
+             | (gSaveBlock2Ptr->playerTrainerId[3] << 24);
 
     if ((u8)(unownLetter - 1) < NUM_UNOWN_FORMS)
     {
@@ -2360,19 +2403,69 @@ void CreateMonWithGenderNatureLetter(struct Pokemon *mon, u16 species, u8 level,
         {
             personality = Random32();
             actualLetter = GET_UNOWN_LETTER(personality);
-        }
-        while (nature != GetNatureFromPersonality(personality)
-            || gender != GetGenderFromSpeciesAndPersonality(species, personality)
-            || actualLetter != unownLetter - 1);
+
+            if (nature != GetNatureFromPersonality(personality)
+             || gender != GetGenderFromSpeciesAndPersonality(species, personality)
+             || actualLetter != unownLetter - 1)
+                continue;
+
+            if (shinyRerolls != 1)
+            {
+                bool32 isShiny = IsShinyOtIdPersonality(otId, personality);
+
+                if (shinyRerolls == 0)
+                {
+                    if (isShiny)
+                        continue;
+                }
+                else if (shinyRerolls < 0)
+                {
+                    if (!isShiny)
+                        continue;
+                }
+                else
+                {
+                    if (!isShiny && --shinyRerolls > 0)
+                        continue;
+                }
+            }
+
+            break;
+        } while (TRUE);
     }
     else
     {
         do
         {
             personality = Random32();
-        }
-        while (nature != GetNatureFromPersonality(personality)
-            || gender != GetGenderFromSpeciesAndPersonality(species, personality));
+
+            if (nature != GetNatureFromPersonality(personality)
+             || gender != GetGenderFromSpeciesAndPersonality(species, personality))
+                continue;
+
+            if (shinyRerolls != 1)
+            {
+                bool32 isShiny = IsShinyOtIdPersonality(otId, personality);
+
+                if (shinyRerolls == 0)
+                {
+                    if (isShiny)
+                        continue;
+                }
+                else if (shinyRerolls < 0)
+                {
+                    if (!isShiny)
+                        continue;
+                }
+                else
+                {
+                    if (!isShiny && --shinyRerolls > 0)
+                        continue;
+                }
+            }
+
+            break;
+        } while (TRUE);
     }
 
     CreateMon(mon, species, level, fixedIV, TRUE, personality, OT_ID_PLAYER_ID, 0);
