@@ -2207,99 +2207,128 @@ void CreateBoxMon(struct BoxPokemon *boxMon, u16 species, u8 level, u8 fixedIV, 
 {
     u8 speciesName[POKEMON_NAME_LENGTH + 1];
     u32 personality;
+    u32 otId;
     u32 value;
     u16 checksum;
+    s32 shinyRerolls = REROLL_SHINY;
+    bool32 shinyLocked = (hasFixedPersonality || otIdType != OT_ID_PLAYER_ID);
 
-    ZeroBoxMonData(boxMon);
-
-    if (hasFixedPersonality)
-        personality = fixedPersonality;
-    else
-        personality = Random32();
-
-    SetBoxMonData(boxMon, MON_DATA_PERSONALITY, &personality);
-
-    // Determine original trainer ID
-    if (otIdType == OT_ID_RANDOM_NO_SHINY)
+    do
     {
-        u32 shinyValue;
-        do
+        ZeroBoxMonData(boxMon);
+
+        if (hasFixedPersonality)
+            personality = fixedPersonality;
+        else
+            personality = Random32();
+
+        SetBoxMonData(boxMon, MON_DATA_PERSONALITY, &personality);
+
+        // Determine original trainer ID
+        if (otIdType == OT_ID_RANDOM_NO_SHINY)
         {
-            // Choose random OT IDs until one that results in a non-shiny Pokémon
-            value = Random32();
-            shinyValue = GET_SHINY_VALUE(value, personality);
-        } while (shinyValue < SHINY_ODDS);
-    }
-    else if (otIdType == OT_ID_PRESET)
-    {
-        value = fixedOtId;
-    }
-    else // Player is the OT
-    {
-        value = gSaveBlock2Ptr->playerTrainerId[0]
-              | (gSaveBlock2Ptr->playerTrainerId[1] << 8)
-              | (gSaveBlock2Ptr->playerTrainerId[2] << 16)
-              | (gSaveBlock2Ptr->playerTrainerId[3] << 24);
-    }
+            u32 shinyValue;
+            do
+            {
+                // Choose random OT IDs until one that results in a non-shiny Pokémon
+                otId = Random32();
+                shinyValue = GET_SHINY_VALUE(otId, personality);
+            } while (shinyValue < SHINY_ODDS);
+        }
+        else if (otIdType == OT_ID_PRESET)
+        {
+            otId = fixedOtId;
+        }
+        else // Player is the OT
+        {
+            otId = gSaveBlock2Ptr->playerTrainerId[0]
+                 | (gSaveBlock2Ptr->playerTrainerId[1] << 8)
+                 | (gSaveBlock2Ptr->playerTrainerId[2] << 16)
+                 | (gSaveBlock2Ptr->playerTrainerId[3] << 24);
+        }
 
-    SetBoxMonData(boxMon, MON_DATA_OT_ID, &value);
+        SetBoxMonData(boxMon, MON_DATA_OT_ID, &otId);
 
-    checksum = CalculateBoxMonChecksum(boxMon);
-    SetBoxMonData(boxMon, MON_DATA_CHECKSUM, &checksum);
-    EncryptBoxMon(boxMon);
-    GetSpeciesName(speciesName, species);
-    SetBoxMonData(boxMon, MON_DATA_NICKNAME, speciesName);
-    SetBoxMonData(boxMon, MON_DATA_LANGUAGE, &gGameLanguage);
-    SetBoxMonData(boxMon, MON_DATA_OT_NAME, gSaveBlock2Ptr->playerName);
-    SetBoxMonData(boxMon, MON_DATA_SPECIES, &species);
-    SetBoxMonData(boxMon, MON_DATA_EXP, &gExperienceTables[gSpeciesInfo[species].growthRate][level]);
-    SetBoxMonData(boxMon, MON_DATA_FRIENDSHIP, &gSpeciesInfo[species].friendship);
-    value = GetCurrentRegionMapSectionId();
-    SetBoxMonData(boxMon, MON_DATA_MET_LOCATION, &value);
-    SetBoxMonData(boxMon, MON_DATA_MET_LEVEL, &level);
-    SetBoxMonData(boxMon, MON_DATA_MET_GAME, &gGameVersion);
-    value = ITEM_POKE_BALL;
-    SetBoxMonData(boxMon, MON_DATA_POKEBALL, &value);
-    SetBoxMonData(boxMon, MON_DATA_OT_GENDER, &gSaveBlock2Ptr->playerGender);
+        checksum = CalculateBoxMonChecksum(boxMon);
+        SetBoxMonData(boxMon, MON_DATA_CHECKSUM, &checksum);
+        EncryptBoxMon(boxMon);
+        GetSpeciesName(speciesName, species);
+        SetBoxMonData(boxMon, MON_DATA_NICKNAME, speciesName);
+        SetBoxMonData(boxMon, MON_DATA_LANGUAGE, &gGameLanguage);
+        SetBoxMonData(boxMon, MON_DATA_OT_NAME, gSaveBlock2Ptr->playerName);
+        SetBoxMonData(boxMon, MON_DATA_SPECIES, &species);
+        SetBoxMonData(boxMon, MON_DATA_EXP, &gExperienceTables[gSpeciesInfo[species].growthRate][level]);
+        SetBoxMonData(boxMon, MON_DATA_FRIENDSHIP, &gSpeciesInfo[species].friendship);
+        value = GetCurrentRegionMapSectionId();
+        SetBoxMonData(boxMon, MON_DATA_MET_LOCATION, &value);
+        SetBoxMonData(boxMon, MON_DATA_MET_LEVEL, &level);
+        SetBoxMonData(boxMon, MON_DATA_MET_GAME, &gGameVersion);
+        value = ITEM_POKE_BALL;
+        SetBoxMonData(boxMon, MON_DATA_POKEBALL, &value);
+        SetBoxMonData(boxMon, MON_DATA_OT_GENDER, &gSaveBlock2Ptr->playerGender);
 
-    if (fixedIV < USE_RANDOM_IVS)
-    {
-        SetBoxMonData(boxMon, MON_DATA_HP_IV, &fixedIV);
-        SetBoxMonData(boxMon, MON_DATA_ATK_IV, &fixedIV);
-        SetBoxMonData(boxMon, MON_DATA_DEF_IV, &fixedIV);
-        SetBoxMonData(boxMon, MON_DATA_SPEED_IV, &fixedIV);
-        SetBoxMonData(boxMon, MON_DATA_SPATK_IV, &fixedIV);
-        SetBoxMonData(boxMon, MON_DATA_SPDEF_IV, &fixedIV);
-    }
-    else
-    {
-        u32 iv;
-        value = Random();
+        if (fixedIV < USE_RANDOM_IVS)
+        {
+            SetBoxMonData(boxMon, MON_DATA_HP_IV, &fixedIV);
+            SetBoxMonData(boxMon, MON_DATA_ATK_IV, &fixedIV);
+            SetBoxMonData(boxMon, MON_DATA_DEF_IV, &fixedIV);
+            SetBoxMonData(boxMon, MON_DATA_SPEED_IV, &fixedIV);
+            SetBoxMonData(boxMon, MON_DATA_SPATK_IV, &fixedIV);
+            SetBoxMonData(boxMon, MON_DATA_SPDEF_IV, &fixedIV);
+        }
+        else
+        {
+            u32 iv;
+            value = Random();
 
-        iv = value & MAX_IV_MASK;
-        SetBoxMonData(boxMon, MON_DATA_HP_IV, &iv);
-        iv = (value & (MAX_IV_MASK << 5)) >> 5;
-        SetBoxMonData(boxMon, MON_DATA_ATK_IV, &iv);
-        iv = (value & (MAX_IV_MASK << 10)) >> 10;
-        SetBoxMonData(boxMon, MON_DATA_DEF_IV, &iv);
+            iv = value & MAX_IV_MASK;
+            SetBoxMonData(boxMon, MON_DATA_HP_IV, &iv);
+            iv = (value & (MAX_IV_MASK << 5)) >> 5;
+            SetBoxMonData(boxMon, MON_DATA_ATK_IV, &iv);
+            iv = (value & (MAX_IV_MASK << 10)) >> 10;
+            SetBoxMonData(boxMon, MON_DATA_DEF_IV, &iv);
 
-        value = Random();
+            value = Random();
 
-        iv = value & MAX_IV_MASK;
-        SetBoxMonData(boxMon, MON_DATA_SPEED_IV, &iv);
-        iv = (value & (MAX_IV_MASK << 5)) >> 5;
-        SetBoxMonData(boxMon, MON_DATA_SPATK_IV, &iv);
-        iv = (value & (MAX_IV_MASK << 10)) >> 10;
-        SetBoxMonData(boxMon, MON_DATA_SPDEF_IV, &iv);
-    }
+            iv = value & MAX_IV_MASK;
+            SetBoxMonData(boxMon, MON_DATA_SPEED_IV, &iv);
+            iv = (value & (MAX_IV_MASK << 5)) >> 5;
+            SetBoxMonData(boxMon, MON_DATA_SPATK_IV, &iv);
+            iv = (value & (MAX_IV_MASK << 10)) >> 10;
+            SetBoxMonData(boxMon, MON_DATA_SPDEF_IV, &iv);
+        }
 
-    if (gSpeciesInfo[species].abilities[1])
-    {
-        value = personality & 1;
-        SetBoxMonData(boxMon, MON_DATA_ABILITY_NUM, &value);
-    }
+        if (gSpeciesInfo[species].abilities[1])
+        {
+            value = personality & 1;
+            SetBoxMonData(boxMon, MON_DATA_ABILITY_NUM, &value);
+        }
 
-    GiveBoxMonInitialMoveset(boxMon);
+        GiveBoxMonInitialMoveset(boxMon);
+
+        if (!shinyLocked && shinyRerolls != 1)
+        {
+            bool32 isShiny = IsShinyOtIdPersonality(otId, personality);
+
+            if (shinyRerolls == 0)
+            {
+                if (isShiny)
+                    continue;
+            }
+            else if (shinyRerolls < 0)
+            {
+                if (!isShiny)
+                    continue;
+            }
+            else
+            {
+                if (!isShiny && --shinyRerolls > 0)
+                    continue;
+            }
+        }
+
+        break;
+    } while (TRUE);
 }
 
 void CreateMonWithNature(struct Pokemon *mon, u16 species, u8 level, u8 fixedIV, u8 nature)

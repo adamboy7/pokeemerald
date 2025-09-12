@@ -55,4 +55,10 @@
 #endif
 #endif
 
+#ifndef REROLL_SHINY
+// Controls how many times a Pokémon is generated to attempt a shiny result.
+// 1 is the default (no re-roll). 0 disables shinies. -1 retries until shiny.
+#define REROLL_SHINY 1
+#endif
+
 #endif // GUARD_CONFIG_H
