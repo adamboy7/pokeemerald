@@ -1522,23 +1522,30 @@ static u8 CalcTypeMultiplier(u8 atkType, u8 defType1, u8 defType2)
     return mult;
 }
 
+static const u8 sText_0x[] = _("0x");
+static const u8 sText_0_25x[] = _("0.25x");
+static const u8 sText_0_5x[] = _("0.5x");
+static const u8 sText_1x[] = _("1x");
+static const u8 sText_2x[] = _("2x");
+static const u8 sText_4x[] = _("4x");
+
 static const u8 *GetMultiplierString(u8 mult)
 {
     switch (mult)
     {
     case 0:
-        return (const u8 *)_("0x");
+        return sText_0x;
     case 5:
-        return (const u8 *)_("0.25x");
+        return sText_0_25x;
     case 10:
-        return (const u8 *)_("0.5x");
+        return sText_0_5x;
     default:
     case 20:
-        return (const u8 *)_("1x");
+        return sText_1x;
     case 40:
-        return (const u8 *)_("2x");
+        return sText_2x;
     case 80:
-        return (const u8 *)_("4x");
+        return sText_4x;
     }
 }
 
