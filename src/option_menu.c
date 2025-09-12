@@ -119,7 +119,7 @@ static const struct BgTemplate sOptionMenuBgTemplates[] =
 {
     {
         .bg = 1,
-        .charBaseIndex = 1,
+        .charBaseIndex = 0,
         .mapBaseIndex = 30,
         .screenSize = 0,
         .paletteMode = 0,

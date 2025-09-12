@@ -19,10 +19,12 @@
 #include "item.h"
 #include "item_menu.h"
 #include "sound.h"
+#include "string_util.h"
 #include "constants/abilities.h"
 #include "constants/game_stat.h"
 #include "constants/items.h"
 #include "constants/layouts.h"
+#include "constants/songs.h"
 #include "constants/weather.h"
 
 extern const u8 EventScript_RepelWoreOff[];

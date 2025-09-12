@@ -1528,24 +1528,28 @@ static const u8 sText_0_5x[] = _("0.5x");
 static const u8 sText_1x[] = _("1x");
 static const u8 sText_2x[] = _("2x");
 static const u8 sText_4x[] = _("4x");
+static const u8 sText_8x[] = _("8x");
 
 static const u8 *GetMultiplierString(u8 mult)
 {
     switch (mult)
     {
-    case 0:
+    case TYPE_MUL_NO_EFFECT: // 0
         return sText_0x;
-    case 5:
+    case 2: // 0.25x (two “not very effective”)
         return sText_0_25x;
-    case 10:
+    case TYPE_MUL_NOT_EFFECTIVE: // 5
         return sText_0_5x;
-    default:
-    case 20:
+    case TYPE_MUL_NORMAL: // 10
         return sText_1x;
-    case 40:
+    case TYPE_MUL_SUPER_EFFECTIVE: // 20
         return sText_2x;
-    case 80:
+    case TYPE_MUL_SUPER_EFFECTIVE * TYPE_MUL_SUPER_EFFECTIVE / TYPE_MUL_NORMAL: // 40
         return sText_4x;
+    case TYPE_MUL_SUPER_EFFECTIVE * TYPE_MUL_SUPER_EFFECTIVE * TYPE_MUL_SUPER_EFFECTIVE / TYPE_MUL_NORMAL / TYPE_MUL_NORMAL: // 80
+        return sText_8x;
+    default:
+        return sText_1x;
     }
 }
 
