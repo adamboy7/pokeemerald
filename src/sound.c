@@ -116,6 +116,18 @@ u16 GetCurrentMapMusic(void)
     return sCurrentMapMusic;
 }
 
+void SetMusicDisabled(bool8 disable)
+{
+    if (gDisableMusic == disable)
+        return;
+
+    gDisableMusic = disable;
+    if (disable)
+        m4aMPlayStop(&gMPlayInfo_BGM);
+    else
+        PlayBGM(GetCurrentMapMusic());
+}
+
 void PlayNewMapMusic(u16 songNum)
 {
     sCurrentMapMusic = songNum;
