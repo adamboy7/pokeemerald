@@ -2210,7 +2210,11 @@ void CreateBoxMon(struct BoxPokemon *boxMon, u16 species, u8 level, u8 fixedIV, 
     u32 otId;
     u32 value;
     u16 checksum;
+#ifdef REROLL_SHINY
     s32 shinyRerolls = REROLL_SHINY;
+#else
+    s32 shinyRerolls = 1;
+#endif
     bool32 shinyLocked = (hasFixedPersonality || otIdType != OT_ID_PLAYER_ID);
 
     do
