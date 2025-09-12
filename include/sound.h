@@ -46,4 +46,7 @@ bool8 IsSEPlaying(void);
 bool8 IsBGMPlaying(void);
 bool8 IsSpecialSEPlaying(void);
 
+void SetMusicDisabled(bool8 disable);
+extern bool8 gDisableMusic;
+
 #endif // GUARD_SOUND_H
