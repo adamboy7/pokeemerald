@@ -35,7 +35,6 @@ enum
     MENUITEM_MUSIC,
     MENUITEM_BUTTONMODE,
     MENUITEM_FRAMETYPE,
-    MENUITEM_CANCEL,
     MENUITEM_COUNT,
 };
 
@@ -91,7 +90,6 @@ static const u8 *const sOptionMenuItemsNames[MENUITEM_COUNT] =
     [MENUITEM_MUSIC]       = gText_Music,
     [MENUITEM_BUTTONMODE]  = gText_ButtonMode,
     [MENUITEM_FRAMETYPE]   = gText_Frame,
-    [MENUITEM_CANCEL]      = gText_OptionMenuCancel,
 };
 
 static const struct WindowTemplate sOptionMenuWinTemplates[] =
@@ -272,12 +270,7 @@ static void Task_OptionMenuFadeIn(u8 taskId)
 
 static void Task_OptionMenuProcessInput(u8 taskId)
 {
-    if (JOY_NEW(A_BUTTON))
-    {
-        if (gTasks[taskId].tMenuSelection == MENUITEM_CANCEL)
-            gTasks[taskId].func = Task_OptionMenuSave;
-    }
-    else if (JOY_NEW(B_BUTTON))
+    if (JOY_NEW(B_BUTTON))
     {
         gTasks[taskId].func = Task_OptionMenuSave;
     }
@@ -286,12 +279,12 @@ static void Task_OptionMenuProcessInput(u8 taskId)
         if (gTasks[taskId].tMenuSelection > 0)
             gTasks[taskId].tMenuSelection--;
         else
-            gTasks[taskId].tMenuSelection = MENUITEM_CANCEL;
+            gTasks[taskId].tMenuSelection = MENUITEM_COUNT - 1;
         HighlightOptionMenuItem(gTasks[taskId].tMenuSelection);
     }
     else if (JOY_NEW(DPAD_DOWN))
     {
-        if (gTasks[taskId].tMenuSelection < MENUITEM_CANCEL)
+        if (gTasks[taskId].tMenuSelection < MENUITEM_COUNT - 1)
             gTasks[taskId].tMenuSelection++;
         else
             gTasks[taskId].tMenuSelection = 0;
@@ -544,8 +537,14 @@ static u8 Music_ProcessInput(u8 selection)
 
 static void Music_DrawChoices(u8 selection)
 {
-    DrawOptionMenuChoice(gText_MusicOn, 104, YPOS_MUSIC, 0);
-    DrawOptionMenuChoice(gText_MusicOff, GetStringRightAlignXOffset(FONT_NORMAL, gText_MusicOff, 198), YPOS_MUSIC, selection);
+    u8 styles[2];
+
+    styles[0] = 0;
+    styles[1] = 0;
+    styles[selection] = 1;
+
+    DrawOptionMenuChoice(gText_MusicOn, 104, YPOS_MUSIC, styles[0]);
+    DrawOptionMenuChoice(gText_MusicOff, GetStringRightAlignXOffset(FONT_NORMAL, gText_MusicOff, 198), YPOS_MUSIC, styles[1]);
 }
 
 static u8 FrameType_ProcessInput(u8 selection)
