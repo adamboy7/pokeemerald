@@ -3,7 +3,7 @@
 #include "gba/flash_internal.h"
 #include "agb_flash.h"
 
-#ifdef PLATFORM_PC
+#if PLATFORM_PC
 #include <errno.h>
 #include <limits.h>
 #include <stdio.h>

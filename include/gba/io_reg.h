@@ -347,7 +347,7 @@
 
 #define REG_ADDR_WAITCNT     (REG_BASE + REG_OFFSET_WAITCNT)
 
-#ifdef PLATFORM_PC
+#if PLATFORM_PC
 extern u8 gIoRegisters[0x400];
 #undef REG_BASE
 #define REG_BASE gIoRegisters

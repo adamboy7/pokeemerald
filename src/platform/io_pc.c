@@ -1,6 +1,6 @@
 #include "platform/io.h"
 
-#ifdef PLATFORM_PC
+#if PLATFORM_PC
 #include <SDL2/SDL.h>
 #include <stdbool.h>
 #include <stdlib.h>

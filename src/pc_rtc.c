@@ -1,6 +1,6 @@
 #include "siirtc.h"
 
-#ifdef PLATFORM_PC
+#if PLATFORM_PC
 #include <time.h>
 
 static u8 BinaryToBcd(int value) { return ((value / 10) << 4) | (value % 10); }

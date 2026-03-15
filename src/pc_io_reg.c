@@ -1,4 +1,4 @@
-#ifdef PLATFORM_PC
+#if PLATFORM_PC
 #include "gba/types.h"
 
 // Simple emulated I/O register space for desktop builds.

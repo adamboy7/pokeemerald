@@ -1,6 +1,6 @@
 #include "gba/gba.h"
 
-#ifdef PLATFORM_PC
+#if PLATFORM_PC
 #include <math.h>
 #include <stddef.h>
 #include <stdlib.h>
