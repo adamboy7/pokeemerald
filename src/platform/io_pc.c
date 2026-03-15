@@ -32,6 +32,24 @@ static u32 sFramebuffer[240 * 160];
 static bool sShowSpriteBoxes;
 static SDL_GameController *sController;
 
+// Per-pixel layer and priority tracking used by the graphics effects post-pass.
+// sLayerBuf / sLayerBuf2 hold the layer index (0-5) of the topmost and second-topmost
+// pixel respectively. sFramebuffer2 holds the second-topmost colour for alpha blending.
+// sWindowMask holds the per-pixel layer-enable bitmask derived from WIN0/WIN1 registers.
+static u8  sPriorityBuf[240 * 160];
+static u8  sLayerBuf[240 * 160];
+static u32 sFramebuffer2[240 * 160];
+static u8  sLayerBuf2[240 * 160];
+static u8  sWindowMask[240 * 160];
+
+// Layer index constants — these match the bit positions of the BLDCNT target fields.
+#define LAYER_BG0 0
+#define LAYER_BG1 1
+#define LAYER_BG2 2
+#define LAYER_BG3 3
+#define LAYER_OBJ 4
+#define LAYER_BD  5
+
 static void Render(void);
 
 static void InitVideo(void)
@@ -190,24 +208,169 @@ static void DrawRect(int x, int y, int w, int h, u32 color)
     }
 }
 
+// Commit a pixel to the framebuffer, pushing the previous top pixel to the
+// second slot so that the alpha-blend post-pass has both layers available.
+static inline void CommitPixel(int idx, u32 color, u8 layer)
+{
+    sLayerBuf2[idx]    = sLayerBuf[idx];
+    sFramebuffer2[idx] = sFramebuffer[idx];
+    sLayerBuf[idx]     = layer;
+    sFramebuffer[idx]  = color;
+}
+
+// Build sWindowMask[240*160].  Each byte is a bitmask of which layers may
+// draw at that screen position: bits 0-3 = BG0-BG3, bit 4 = OBJ.
+// When no windows are active every pixel gets 0x1F (all layers enabled).
+static void ComputeWindowMask(u16 dispcnt)
+{
+    bool win0   = (dispcnt & DISPCNT_WIN0_ON)   != 0;
+    bool win1   = (dispcnt & DISPCNT_WIN1_ON)   != 0;
+    bool objwin = (dispcnt & DISPCNT_OBJWIN_ON) != 0;
+
+    if (!win0 && !win1 && !objwin)
+    {
+        memset(sWindowMask, 0x1F, sizeof(sWindowMask));
+        return;
+    }
+
+    u16 winin  = READ_REG_U16(REG_OFFSET_WININ);
+    u16 winout = READ_REG_U16(REG_OFFSET_WINOUT);
+
+    u8 out_mask  = winout & 0x1F;          // outside all windows
+    u8 win0_mask = winin & 0x1F;           // inside WIN0
+    u8 win1_mask = (winin >> 8) & 0x1F;   // inside WIN1
+
+    u16 win0h = win0 ? READ_REG_U16(REG_OFFSET_WIN0H) : 0;
+    u16 win0v = win0 ? READ_REG_U16(REG_OFFSET_WIN0V) : 0;
+    u16 win1h = win1 ? READ_REG_U16(REG_OFFSET_WIN1H) : 0;
+    u16 win1v = win1 ? READ_REG_U16(REG_OFFSET_WIN1V) : 0;
+
+    int win0x1 = win0h >> 8,  win0x2 = win0h & 0xFF;
+    int win0y1 = win0v >> 8,  win0y2 = win0v & 0xFF;
+    int win1x1 = win1h >> 8,  win1x2 = win1h & 0xFF;
+    int win1y1 = win1v >> 8,  win1y2 = win1v & 0xFF;
+
+    for (int y = 0; y < 160; y++)
+    {
+        bool inWin0y = win0 && y >= win0y1 && y < win0y2;
+        bool inWin1y = win1 && y >= win1y1 && y < win1y2;
+        for (int x = 0; x < 240; x++)
+        {
+            u8 mask;
+            if (inWin0y && x >= win0x1 && x < win0x2)
+                mask = win0_mask;
+            else if (inWin1y && x >= win1x1 && x < win1x2)
+                mask = win1_mask;
+            else
+                mask = out_mask;
+            sWindowMask[y * 240 + x] = mask;
+        }
+    }
+}
+
+// Apply colour special effects (BLDCNT / BLDALPHA / BLDY) to sFramebuffer.
+// Must be called after all layers have been rendered and sLayerBuf is final.
+static void ApplyColorEffects(void)
+{
+    u16 bldcnt = READ_REG_U16(REG_OFFSET_BLDCNT);
+    u8  effect  = (bldcnt >> 6) & 3;
+    if (effect == 0)
+        return;
+
+    u8 target1 = bldcnt & 0x3F;       // bits 0-5: BG0,BG1,BG2,BG3,OBJ,BD
+
+    if (effect >= 2)
+    {
+        // Effect 2: brightness increase   Effect 3: brightness decrease
+        u32 bldy = READ_REG_U16(REG_OFFSET_BLDY) & 0x1F;
+        if (bldy > 16) bldy = 16;
+        if (bldy == 0) return;
+
+        for (int i = 0; i < 240 * 160; i++)
+        {
+            if (!((1u << sLayerBuf[i]) & target1))
+                continue;
+            u32 argb = sFramebuffer[i];
+            u32 r = (argb >> 16) & 0xFF;
+            u32 g = (argb >>  8) & 0xFF;
+            u32 b =  argb        & 0xFF;
+            if (effect == 2)
+            {
+                r += (255 - r) * bldy / 16;
+                g += (255 - g) * bldy / 16;
+                b += (255 - b) * bldy / 16;
+            }
+            else
+            {
+                r = r - r * bldy / 16;
+                g = g - g * bldy / 16;
+                b = b - b * bldy / 16;
+            }
+            sFramebuffer[i] = 0xFF000000u | (r << 16) | (g << 8) | b;
+        }
+    }
+    else
+    {
+        // Effect 1: alpha blend between first and second targets.
+        u16 bldalpha = READ_REG_U16(REG_OFFSET_BLDALPHA);
+        u32 eva = bldalpha & 0x1F;
+        u32 evb = (bldalpha >> 8) & 0x1F;
+        if (eva > 16) eva = 16;
+        if (evb > 16) evb = 16;
+        u8 target2 = (bldcnt >> 8) & 0x3F;  // bits 8-13: second target
+
+        for (int i = 0; i < 240 * 160; i++)
+        {
+            if (!((1u << sLayerBuf[i])  & target1)) continue;
+            if (!((1u << sLayerBuf2[i]) & target2)) continue;
+
+            u32 c1 = sFramebuffer[i];
+            u32 c2 = sFramebuffer2[i];
+            u32 r = ((c1 >> 16 & 0xFF) * eva + (c2 >> 16 & 0xFF) * evb) / 16;
+            u32 g = ((c1 >>  8 & 0xFF) * eva + (c2 >>  8 & 0xFF) * evb) / 16;
+            u32 b = ((c1       & 0xFF) * eva + (c2        & 0xFF) * evb) / 16;
+            if (r > 255) r = 255;
+            if (g > 255) g = 255;
+            if (b > 255) b = 255;
+            sFramebuffer[i] = 0xFF000000u | (r << 16) | (g << 8) | b;
+        }
+    }
+}
+
 static void Render(void)
 {
-    u16 dispcnt = READ_REG_U16(REG_OFFSET_DISPCNT);
-    u16 *bgPltt = (u16 *)gPCPltt;
+    u16 dispcnt  = READ_REG_U16(REG_OFFSET_DISPCNT);
+    u16 *bgPltt  = (u16 *)gPCPltt;
     u16 *objPltt = (u16 *)(gPCPltt + BG_PLTT_SIZE);
-    static u8 sPriorityBuf[240 * 160];
+    int bgMode   = dispcnt & 7;
 
     u32 backdrop = PlttColorToArgb(bgPltt[0]);
     for (int i = 0; i < 240 * 160; i++)
     {
-        sFramebuffer[i] = backdrop;
-        sPriorityBuf[i] = 4;
+        sFramebuffer[i]  = backdrop;
+        sFramebuffer2[i] = backdrop;
+        sPriorityBuf[i]  = 4;
+        sLayerBuf[i]     = LAYER_BD;
+        sLayerBuf2[i]    = LAYER_BD;
     }
 
     if (dispcnt & DISPCNT_FORCED_BLANK)
         return;
 
-    // Render backgrounds by priority (3 -> 0)
+    bool anyWin = (dispcnt & (DISPCNT_WIN0_ON | DISPCNT_WIN1_ON | DISPCNT_OBJWIN_ON)) != 0;
+    ComputeWindowMask(dispcnt);
+
+    // Mosaic sizes (1 = no effect, 2+ = cell size in pixels).
+    u16 mosaic  = READ_REG_U16(REG_OFFSET_MOSAIC);
+    int bgMosH  = (mosaic & 0xF) + 1;
+    int bgMosV  = ((mosaic >> 4) & 0xF) + 1;
+    int objMosH = ((mosaic >> 8) & 0xF) + 1;
+    int objMosV = ((mosaic >> 12) & 0xF) + 1;
+
+    // Affine map dimensions indexed by BGCNT bits 14-15.
+    static const int sAffineMapSizes[4] = { 128, 256, 512, 1024 };
+
+    // Render backgrounds, lowest priority first (drawn first = furthest back).
     for (int prio = 3; prio >= 0; prio--)
     {
         for (int bg = 0; bg < 4; bg++)
@@ -219,60 +382,145 @@ static void Render(void)
             if ((bgcnt & 3) != prio)
                 continue;
 
-            bool is8bpp = bgcnt & BGCNT_256COLOR;
-            u8 *charBase = BG_CHAR_ADDR((bgcnt >> 2) & 3);
-            u8 *screenBase = BG_SCREEN_ADDR((bgcnt >> 8) & 31);
-            int screenSize = (bgcnt >> 14) & 3;
-            static const int sBgDimensions[4][2] = {{256,256},{512,256},{256,512},{512,512}};
-            int width = sBgDimensions[screenSize][0];
-            int height = sBgDimensions[screenSize][1];
-            u16 hofs = READ_REG_U16(REG_OFFSET_BG0HOFS + bg * 8);
-            u16 vofs = READ_REG_U16(REG_OFFSET_BG0VOFS + bg * 8);
-            int tileSize = is8bpp ? 64 : 32;
+            // Affine BG: mode 1 → BG2 affine; mode 2 → BG2+BG3 affine.
+            bool isAffine = (bgMode == 1 && bg == 2) ||
+                            (bgMode == 2 && (bg == 2 || bg == 3));
+            // Bit in the window mask corresponding to this BG.
+            u8 layerBit = (u8)(1u << bg);
+            bool mosEn = (bgcnt & 0x40) != 0;
 
-            for (int y = 0; y < 160; y++)
+            if (isAffine)
             {
-                int yCoord = (y + vofs) % height;
-                int tileRow = yCoord / 8;
-                int inTileY = yCoord % 8;
-                for (int x = 0; x < 240; x++)
+                // Affine BG: scanline-based affine transformation using
+                // the PA/PB/PC/PD matrix and reference point X/Y registers.
+                u32 paOff = (bg == 2) ? REG_OFFSET_BG2PA : REG_OFFSET_BG3PA;
+                u32 xOff  = (bg == 2) ? REG_OFFSET_BG2X  : REG_OFFSET_BG3X;
+                u32 yOff  = (bg == 2) ? REG_OFFSET_BG2Y  : REG_OFFSET_BG3Y;
+
+                s16 pa = (s16)READ_REG_U16(paOff);
+                s16 pb = (s16)READ_REG_U16(paOff + 2);
+                s16 pc = (s16)READ_REG_U16(paOff + 4);
+                s16 pd = (s16)READ_REG_U16(paOff + 6);
+
+                // 28.8 fixed-point reference point; sign-extend from bit 27.
+                s32 refX = (s32)READ_REG_U32(xOff);
+                s32 refY = (s32)READ_REG_U32(yOff);
+                if (refX & 0x08000000) refX |= (s32)0xF8000000;
+                if (refY & 0x08000000) refY |= (s32)0xF8000000;
+
+                int mapSize  = sAffineMapSizes[(bgcnt >> 14) & 3];
+                int mapTiles = mapSize / 8;
+                bool wrap    = (bgcnt & BGCNT_WRAP) != 0;
+
+                u8 *charBase = BG_CHAR_ADDR((bgcnt >> 2) & 3);
+                u8 *mapBase  = BG_SCREEN_ADDR((bgcnt >> 8) & 31);
+
+                for (int y = 0; y < 160; y++)
                 {
-                    int xCoord = (x + hofs) % width;
-                    int tileCol = xCoord / 8;
-                    int inTileX = xCoord % 8;
-                    u32 block = 0;
-                    switch (screenSize)
+                    int ym = mosEn ? (y / bgMosV) * bgMosV : y;
+                    for (int x = 0; x < 240; x++)
                     {
-                    default:
-                    case 0: block = 0; break;
-                    case 1: block = (tileCol / 32); break; // 512x256
-                    case 2: block = (tileRow / 32); break; // 256x512
-                    case 3: block = (tileRow / 32) * 2 + (tileCol / 32); break; // 512x512
+                        int idx = y * 240 + x;
+                        if (anyWin && !(sWindowMask[idx] & layerBit))
+                            continue;
+
+                        int xm = mosEn ? (x / bgMosH) * bgMosH : x;
+
+                        s32 sx = refX + pa * xm + pb * ym;
+                        s32 sy = refY + pc * xm + pd * ym;
+                        int srcX = sx >> 8;
+                        int srcY = sy >> 8;
+
+                        if (wrap)
+                        {
+                            srcX = ((srcX % mapSize) + mapSize) % mapSize;
+                            srcY = ((srcY % mapSize) + mapSize) % mapSize;
+                        }
+                        else if (srcX < 0 || srcX >= mapSize || srcY < 0 || srcY >= mapSize)
+                            continue;
+
+                        int tileX = srcX / 8, tileY = srcY / 8;
+                        int inX   = srcX & 7, inY   = srcY & 7;
+                        u8 tileIdx   = mapBase[tileY * mapTiles + tileX];
+                        u8 *tile     = charBase + (u32)tileIdx * 64;
+                        u8 colorIdx  = tile[inY * 8 + inX];
+                        if (colorIdx == 0)
+                            continue;
+
+                        CommitPixel(idx, PlttColorToArgb(bgPltt[colorIdx]), (u8)bg);
+                        sPriorityBuf[idx] = (u8)prio;
                     }
-                    u16 *map = (u16 *)(screenBase + block * 0x800);
-                    u16 entry = map[(tileRow % 32) * 32 + (tileCol % 32)];
-                    u16 tileNum = entry & 0x3FF;
-                    bool hflip = entry & 0x400;
-                    bool vflip = entry & 0x800;
-                    u8 palBank = entry >> 12;
-                    u8 *tile = charBase + tileNum * tileSize;
-                    int tx = hflip ? (7 - inTileX) : inTileX;
-                    int ty = vflip ? (7 - inTileY) : inTileY;
-                    u16 colorIndex;
-                    if (is8bpp)
+                }
+            }
+            else
+            {
+                // Text BG: tile-map based rendering with HOFS/VOFS scrolling.
+                bool is8bpp    = (bgcnt & BGCNT_256COLOR) != 0;
+                u8 *charBase   = BG_CHAR_ADDR((bgcnt >> 2) & 3);
+                u8 *screenBase = BG_SCREEN_ADDR((bgcnt >> 8) & 31);
+                int screenSize = (bgcnt >> 14) & 3;
+                static const int sBgDimensions[4][2] =
+                    { {256,256}, {512,256}, {256,512}, {512,512} };
+                int mapW  = sBgDimensions[screenSize][0];
+                int mapH  = sBgDimensions[screenSize][1];
+                u16 hofs  = READ_REG_U16(REG_OFFSET_BG0HOFS + bg * 8);
+                u16 vofs  = READ_REG_U16(REG_OFFSET_BG0VOFS + bg * 8);
+                int tileSize = is8bpp ? 64 : 32;
+
+                for (int y = 0; y < 160; y++)
+                {
+                    int ym       = mosEn ? (y / bgMosV) * bgMosV : y;
+                    int yCoord   = (ym + vofs) % mapH;
+                    int tileRow  = yCoord / 8;
+                    int inTileY  = yCoord % 8;
+
+                    for (int x = 0; x < 240; x++)
                     {
-                        colorIndex = tile[ty * 8 + tx];
+                        int idx = y * 240 + x;
+                        if (anyWin && !(sWindowMask[idx] & layerBit))
+                            continue;
+
+                        int xm      = mosEn ? (x / bgMosH) * bgMosH : x;
+                        int xCoord  = (xm + hofs) % mapW;
+                        int tileCol = xCoord / 8;
+                        int inTileX = xCoord % 8;
+
+                        u32 block;
+                        switch (screenSize)
+                        {
+                        default:
+                        case 0: block = 0; break;
+                        case 1: block = tileCol / 32; break;
+                        case 2: block = tileRow / 32; break;
+                        case 3: block = (tileRow / 32) * 2 + (tileCol / 32); break;
+                        }
+                        u16 *map   = (u16 *)(screenBase + block * 0x800);
+                        u16  entry = map[(tileRow % 32) * 32 + (tileCol % 32)];
+                        u16  tileNum = entry & 0x3FF;
+                        bool hflip   = (entry & 0x400) != 0;
+                        bool vflip   = (entry & 0x800) != 0;
+                        u8   palBank = entry >> 12;
+                        u8 *tile = charBase + tileNum * tileSize;
+                        int tx = hflip ? (7 - inTileX) : inTileX;
+                        int ty = vflip ? (7 - inTileY)  : inTileY;
+
+                        u16 colorIdx;
+                        if (is8bpp)
+                        {
+                            colorIdx = tile[ty * 8 + tx];
+                            if (colorIdx == 0) continue;
+                        }
+                        else
+                        {
+                            u8 byte = tile[ty * 4 + tx / 2];
+                            colorIdx = (tx & 1) ? (byte >> 4) : (byte & 0xF);
+                            if (colorIdx == 0) continue;  // transparent within palette bank
+                            colorIdx += palBank * 16;
+                        }
+
+                        CommitPixel(idx, PlttColorToArgb(bgPltt[colorIdx]), (u8)bg);
+                        sPriorityBuf[idx] = (u8)prio;
                     }
-                    else
-                    {
-                        u8 byte = tile[ty * 4 + tx / 2];
-                        colorIndex = (tx & 1) ? (byte >> 4) : (byte & 0xF);
-                        colorIndex += palBank * 16;
-                    }
-                    u16 color = bgPltt[colorIndex];
-                    int idx = y * 240 + x;
-                    sFramebuffer[idx] = PlttColorToArgb(color);
-                    sPriorityBuf[idx] = prio;
                 }
             }
         }
@@ -281,14 +529,14 @@ static void Render(void)
     // Render sprites
     if (dispcnt & DISPCNT_OBJ_ON)
     {
-        bool obj1D = dispcnt & DISPCNT_OBJ_1D_MAP;
-        u16 *oam = (u16 *)gPCOam;
+        bool obj1D = (dispcnt & DISPCNT_OBJ_1D_MAP) != 0;
+        u16 *oam   = (u16 *)gPCOam;
         for (int i = 0; i < 128; i++)
         {
             u16 attr0 = oam[i * 4 + 0];
             u16 attr1 = oam[i * 4 + 1];
             u16 attr2 = oam[i * 4 + 2];
-            if (((attr0 >> 8) & 3) == 2) // hidden
+            if (((attr0 >> 8) & 3) == 2) // OBJ_MODE_HIDDEN
                 continue;
 
             int y = attr0 & 0xFF;
@@ -297,62 +545,73 @@ static void Render(void)
             if (x >= 240) x -= 512;
 
             int shape = (attr0 >> 14) & 3;
-            int size = (attr1 >> 14) & 3;
+            int size  = (attr1 >> 14) & 3;
             int width, height;
             GetSpriteSize(shape, size, &width, &height);
 
-            bool hflip = attr1 & (1 << 12);
-            bool vflip = attr1 & (1 << 13);
-            bool is8bpp = attr0 & (1 << 13);
-            int tileNum = attr2 & 0x3FF;
-            int priority = (attr2 >> 10) & 3;
-            int palNum = (attr2 >> 12) & 0xF;
-            int tileSizeSprite = is8bpp ? 64 : 32;
-            int tilesPerRow = is8bpp ? width / 8 : width / 8;
+            bool is8bpp  = (attr0 & (1 << 13)) != 0;
+            int  tileNum = attr2 & 0x3FF;
+            int  priority = (attr2 >> 10) & 3;
+            int  palNum  = (attr2 >> 12) & 0xF;
+            int  tileSz  = is8bpp ? 64 : 32;
+            int  tilesW  = width / 8;
+            bool mosEn   = (attr0 & 0x1000) != 0;
+
+            // Flip bits are only meaningful in non-affine mode (attr0 bits 8-9 == 0).
+            bool nonAffine = ((attr0 >> 8) & 1) == 0;
+            bool hflip     = nonAffine && (attr1 & (1 << 12)) != 0;
+            bool vflip     = nonAffine && (attr1 & (1 << 13)) != 0;
 
             for (int py = 0; py < height; py++)
             {
                 int screenY = y + py;
                 if (screenY < 0 || screenY >= 160)
                     continue;
-                int ty = vflip ? (height - 1 - py) : py;
-                int tileRow = ty / 8;
-                int inTileY = ty % 8;
+
+                // Mosaic: sample from the top-left corner of the mosaic cell.
+                int pym    = mosEn ? (py / objMosV) * objMosV : py;
+                int tym    = vflip ? (height - 1 - pym) : pym;
+                int tileRowM = tym / 8;
+                int inTileYM = tym % 8;
+
                 for (int px = 0; px < width; px++)
                 {
                     int screenX = x + px;
                     if (screenX < 0 || screenX >= 240)
                         continue;
-                    int tx = hflip ? (width - 1 - px) : px;
-                    int tileCol = tx / 8;
-                    int inTileX = tx % 8;
-                    int tileIndex;
-                    if (obj1D)
-                        tileIndex = tileNum + tileRow * tilesPerRow + tileCol;
-                    else
-                        tileIndex = tileNum + tileCol + tileRow * 32;
-                    u8 *tile = OBJ_VRAM0 + tileIndex * tileSizeSprite;
-                    u16 colorIndex;
-                    if (is8bpp)
-                    {
-                        colorIndex = tile[inTileY * 8 + inTileX];
-                        if (colorIndex == 0)
-                            continue;
-                    }
-                    else
-                    {
-                        u8 byte = tile[inTileY * 4 + inTileX / 2];
-                        colorIndex = (inTileX & 1) ? (byte >> 4) : (byte & 0xF);
-                        if (colorIndex == 0)
-                            continue;
-                        colorIndex += palNum * 16;
-                    }
                     int idx = screenY * 240 + screenX;
+                    if (anyWin && !(sWindowMask[idx] & (1 << LAYER_OBJ)))
+                        continue;
                     if (sPriorityBuf[idx] <= priority)
                         continue;
-                    u16 color = objPltt[colorIndex];
-                    sFramebuffer[idx] = PlttColorToArgb(color);
-                    sPriorityBuf[idx] = priority;
+
+                    int pxm    = mosEn ? (px / objMosH) * objMosH : px;
+                    int tx     = hflip ? (width - 1 - pxm) : pxm;
+                    int tileCol = tx / 8;
+                    int inTileX = tx % 8;
+
+                    int tileIndex;
+                    if (obj1D)
+                        tileIndex = tileNum + tileRowM * tilesW + tileCol;
+                    else
+                        tileIndex = tileNum + tileCol + tileRowM * 32;
+
+                    u8 *tile = OBJ_VRAM0 + tileIndex * tileSz;
+                    u16 colorIdx;
+                    if (is8bpp)
+                    {
+                        colorIdx = tile[inTileYM * 8 + inTileX];
+                        if (colorIdx == 0) continue;
+                    }
+                    else
+                    {
+                        u8 byte = tile[inTileYM * 4 + inTileX / 2];
+                        colorIdx = (inTileX & 1) ? (byte >> 4) : (byte & 0xF);
+                        if (colorIdx == 0) continue;
+                        colorIdx += palNum * 16;
+                    }
+                    CommitPixel(idx, PlttColorToArgb(objPltt[colorIdx]), LAYER_OBJ);
+                    sPriorityBuf[idx] = (u8)priority;
                 }
             }
 
@@ -360,6 +619,9 @@ static void Render(void)
                 DrawRect(x, y, width, height, 0xFFFF00FF);
         }
     }
+
+    // Post-pass: colour special effects (brightness / alpha blend).
+    ApplyColorEffects();
 }
 
 static void RenderAndPresent(void)
@@ -593,4 +855,3 @@ void PlatformWriteReg(u16 regOffset, u16 value)
         RenderAndPresent();
 }
 #endif // PLATFORM_PC
-

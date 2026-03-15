@@ -245,14 +245,96 @@ void RLUnCompVram(const u32 *src, void *dest)
     RLUnComp((const u8 *)src, dest);
 }
 
-// Huffman decompression is rarely used by the engine. A full
-// implementation would require replicating the BIOS Huffman tree
-// construction, which is beyond the needs of the desktop build.
-// Provide a stub so that links succeed should it ever be referenced.
+// GBA BIOS Huffman decompression (SWI 0x13).
+// Header layout (little-endian):
+//   Byte  0:      compression type — 0x28 (8-bit symbols) or 0x24 (4-bit symbols)
+//   Bytes 1-3:    uncompressed output size in bytes
+//   Byte  4:      tree_size — tree data is (tree_size + 1) * 2 bytes
+//   Bytes 5..:    Huffman tree nodes (root at index 0)
+// Bitstream follows the tree, 4-byte aligned from the start of src.
+//
+// Each tree node byte at index n:
+//   Bit 7:  left  child (bit=0 path) is a leaf — value is tree[childPair]
+//   Bit 6:  right child (bit=1 path) is a leaf — value is tree[childPair+1]
+//   Bits 5-1: offset to child pair from current pair base:
+//             childPair = (n & ~1) + (nodeVal & 0x3E) + 2
+// Bitstream is MSB-first; 4-bit mode packs two nibbles per byte, low nibble first.
 void HuffUnComp(const u8 *src, void *dest)
 {
-    (void)src;
-    (void)dest;
+    u32 header = *(const u32 *)src;
+    u8 bitDepth = header & 0xF;     // 4 or 8
+    u32 outBytes = header >> 8;
+
+    if (bitDepth != 4 && bitDepth != 8)
+        return;
+
+    u8 treeSize = src[4];
+    const u8 *tree = src + 5;
+
+    // Bitstream starts at next 4-byte boundary after header + tree_size byte + tree data.
+    u32 treeDataBytes = (u32)(treeSize + 1) * 2;
+    u32 streamOff = (5u + treeDataBytes + 3u) & ~3u;
+    const u32 *stream = (const u32 *)(src + streamOff);
+
+    u8 *dst = (u8 *)dest;
+    u32 wordBuf = 0;
+    int bitsLeft = 0;
+
+    u32 pendingNibble = 0;  // first nibble waiting for second (4-bit mode)
+    int hasPending = 0;
+    u32 bytesOut = 0;
+
+    while (bytesOut < outBytes)
+    {
+        // Walk the tree from the root to decode one symbol.
+        u32 nodeIdx = 0;
+
+        for (;;)
+        {
+            if (bitsLeft == 0)
+            {
+                wordBuf = *stream++;
+                bitsLeft = 32;
+            }
+            u32 bit = (wordBuf >> 31) & 1;
+            wordBuf <<= 1;
+            bitsLeft--;
+
+            u8 nodeVal = tree[nodeIdx];
+            u32 pairBase = nodeIdx & ~1u;
+            u32 childPair = pairBase + (nodeVal & 0x3E) + 2;
+            u32 childIdx = childPair + bit;
+            // bit 7 = left child is leaf, bit 6 = right child is leaf
+            bool isLeaf = (nodeVal >> (7u - bit)) & 1u;
+
+            if (isLeaf)
+            {
+                u8 symbol = tree[childIdx];
+                if (bitDepth == 8)
+                {
+                    *dst++ = symbol;
+                    bytesOut++;
+                }
+                else
+                {
+                    // 4-bit: accumulate two nibbles into one byte, low nibble first.
+                    if (!hasPending)
+                    {
+                        pendingNibble = symbol & 0xF;
+                        hasPending = 1;
+                    }
+                    else
+                    {
+                        *dst++ = (u8)(pendingNibble | ((symbol & 0xF) << 4));
+                        bytesOut++;
+                        hasPending = 0;
+                    }
+                }
+                break;
+            }
+            nodeIdx = childIdx;
+        }
+    }
 }
 
 void BitUnPack(const void *src, void *dest, const struct BitUnPackParams *params)
