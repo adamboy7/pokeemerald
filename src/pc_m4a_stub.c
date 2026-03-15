@@ -144,8 +144,18 @@ void TrkVolPitSet(struct MusicPlayerInfo *mplayInfo, struct MusicPlayerTrack *tr
     (void)track;
 }
 
-// Main audio tick.  Without a PCM mixer this only advances the fade state
-// machine so that MPlayFadeOut / MPlayFadeIn work correctly from game code.
+// Main audio tick: advance the fade state machine and mix all active
+// DirectSound channels into soundInfo->pcmBuffer.
+//
+// Step derivation: ch->frequency is in units of sampleRate * 2^32 / cpuFreq
+// (cpuFreq = 16,777,216 Hz).  Source samples per output sample:
+//   step_float = ch->frequency * cpuFreq / 2^32 / pcmFreq
+//              = ch->frequency * 16,777,216 / 4,294,967,296 / pcmFreq
+//              = ch->frequency / (256 * pcmFreq)
+// In 16.16 fixed-point: step_16_16 = ch->frequency * 256 / pcmFreq.
+// fw accumulates step_16_16 each output sample; the integer part (fw >> 16)
+// gives the number of source samples to advance, and the fractional part
+// (fw & 0xFFFF) carries over to the next output sample.
 void SoundMain(void)
 {
     struct SoundInfo *soundInfo = SOUND_INFO_PTR;
@@ -153,6 +163,7 @@ void SoundMain(void)
     if (soundInfo->ident < ID_NUMBER || soundInfo->ident > ID_NUMBER + 1)
         return;
 
+    // --- Fade state machine ---
     struct MusicPlayerInfo *mplayInfo = soundInfo->musicPlayerHead;
     while (mplayInfo != NULL)
     {
@@ -169,6 +180,100 @@ void SoundMain(void)
             }
         }
         mplayInfo = mplayInfo->musicPlayerNext;
+    }
+
+    // --- DirectSound PCM mixer ---
+    int nSamples = soundInfo->pcmSamplesPerVBlank;
+    if (nSamples <= 0 || nSamples > PCM_DMA_BUF_SIZE)
+        return;
+
+    s8 *bufL = soundInfo->pcmBuffer;
+    s8 *bufR = soundInfo->pcmBuffer + PCM_DMA_BUF_SIZE;
+
+    // Use a s16 accumulation buffer to handle multiple channels without clipping.
+    // Stack allocation is fine: PCM_DMA_BUF_SIZE = 1584, so 2 * 1584 * 2 = 6336 bytes.
+    static s16 mixL[PCM_DMA_BUF_SIZE];
+    static s16 mixR[PCM_DMA_BUF_SIZE];
+    memset(mixL, 0, nSamples * sizeof(s16));
+    memset(mixR, 0, nSamples * sizeof(s16));
+
+    u32 pcmFreq = (u32)soundInfo->pcmFreq;
+    if (pcmFreq == 0)
+        pcmFreq = 13379;
+
+    for (int ci = 0; ci < soundInfo->maxChans; ci++)
+    {
+        struct SoundChannel *ch = &soundInfo->chans[ci];
+
+        // Channel is active when SF_START is set and not SF_STOP.
+        if (!(ch->statusFlags & SOUND_CHANNEL_SF_START))
+            continue;
+        if (ch->statusFlags & SOUND_CHANNEL_SF_STOP)
+            continue;
+        if (ch->wav == NULL || ch->currentPointer == NULL)
+            continue;
+
+        struct WaveData *wav = ch->wav;
+        // Loop flag is bit 14 of wav->type in AGB format.
+        int loopEnabled = (wav->type & 0xC000) != 0;
+
+        // 16.16 fixed-point step: source samples per output sample.
+        u32 step = (u32)(((u64)ch->frequency * 256) / pcmFreq);
+        u32 fw   = ch->fw;
+
+        u8 volL = ch->envelopeVolumeLeft;
+        u8 volR = ch->envelopeVolumeRight;
+
+        // Apply master volume (0–15 → scale by masterVolume/16).
+        volL = (u8)((volL * soundInfo->masterVolume) >> 4);
+        volR = (u8)((volR * soundInfo->masterVolume) >> 4);
+
+        s8 *end = wav->data + wav->loopStart + wav->size;
+
+        for (int s = 0; s < nSamples; s++)
+        {
+            // Advance fractional position.
+            fw += step;
+            u32 advance = fw >> 16;
+            fw &= 0xFFFF;
+
+            if (advance > 0)
+            {
+                ch->currentPointer += advance;
+
+                // Handle end-of-wave.
+                while (ch->currentPointer >= end)
+                {
+                    if (loopEnabled)
+                    {
+                        // Wrap back to loop start.
+                        u32 overshoot = (u32)(ch->currentPointer - end);
+                        ch->currentPointer = wav->data + wav->loopStart + overshoot % wav->size;
+                    }
+                    else
+                    {
+                        // Non-looping sample finished.
+                        ch->statusFlags &= ~SOUND_CHANNEL_SF_START;
+                        ch->statusFlags |= SOUND_CHANNEL_SF_STOP;
+                        goto next_channel;
+                    }
+                }
+            }
+
+            s32 sample = (s32)*ch->currentPointer;
+            mixL[s] += (s16)((sample * (s32)volL) >> 8);
+            mixR[s] += (s16)((sample * (s32)volR) >> 8);
+        }
+        next_channel:
+        ch->fw = fw;
+    }
+
+    // Clamp and write to the PCM buffer consumed by SdlAudioCallback.
+    for (int s = 0; s < nSamples; s++)
+    {
+        s32 l = mixL[s], r = mixR[s];
+        bufL[s] = (s8)(l >  127 ?  127 : l < -128 ? -128 : l);
+        bufR[s] = (s8)(r >  127 ?  127 : r < -128 ? -128 : r);
     }
 }
 void Clear64byte(void *addr) { memset(addr, 0, 64); }

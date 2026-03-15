@@ -26,9 +26,21 @@
 
 #define ALIGNED(n) __attribute__((aligned(n)))
 
+#if PLATFORM_PC
+// On PC, GBA IWRAM at 0x3007FF0-0x3007FFC is not mapped. Redirect these
+// to ordinary global variables so reads/writes don't fault.
+struct SoundInfo;
+extern struct SoundInfo *gSoundInfoPtr;
+extern u16 gIntrCheck;
+extern void *gIntrVector;
+#define SOUND_INFO_PTR gSoundInfoPtr
+#define INTR_CHECK     gIntrCheck
+#define INTR_VECTOR    (*(void **)&gIntrVector)
+#else
 #define SOUND_INFO_PTR (*(struct SoundInfo **)0x3007FF0)
 #define INTR_CHECK     (*(u16 *)0x3007FF8)
 #define INTR_VECTOR    (*(void **)0x3007FFC)
+#endif
 
 #define EWRAM_START 0x02000000
 #define EWRAM_END   (EWRAM_START + 0x40000)

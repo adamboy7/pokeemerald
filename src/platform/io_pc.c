@@ -10,6 +10,10 @@
 #include "gba/defines.h"
 
 
+// Forward declaration of the interrupt handler table populated by InitIntrHandlers().
+// Use the raw function pointer type to avoid a conflicting typedef with main.h.
+extern void (*gIntrTable[])(void);
+
 #define DMA_CHANNELS 4
 #define TIMER_COUNT 4
 
@@ -367,6 +371,44 @@ static void Render(void)
     int objMosH = ((mosaic >> 8) & 0xF) + 1;
     int objMosV = ((mosaic >> 12) & 0xF) + 1;
 
+    // --- Bitmap modes (3, 4, 5) ---
+    // These modes use VRAM directly as a framebuffer instead of tile maps.
+    if (bgMode == 3)
+    {
+        // Mode 3: 240×160, 15-bpp (RGB555), single page at VRAM offset 0.
+        const u16 *src = (const u16 *)gPCVram;
+        for (int y = 0; y < 160; y++)
+            for (int x = 0; x < 240; x++)
+                CommitPixel(y * 240 + x, PlttColorToArgb(src[y * 240 + x]), LAYER_BG2);
+        ApplyColorEffects();
+        return;
+    }
+    if (bgMode == 4)
+    {
+        // Mode 4: 240×160, 8-bpp palette-indexed, double-buffered.
+        // DISPCNT bit 4 (DISPCNT_FRAME_SEL) selects page 0 (0x0000) or page 1 (0xA000).
+        u32 page = (dispcnt & 0x0010) ? 0xA000 : 0x0000;
+        const u8 *src = (const u8 *)gPCVram + page;
+        for (int y = 0; y < 160; y++)
+            for (int x = 0; x < 240; x++)
+                CommitPixel(y * 240 + x, PlttColorToArgb(bgPltt[src[y * 240 + x]]), LAYER_BG2);
+        ApplyColorEffects();
+        return;
+    }
+    if (bgMode == 5)
+    {
+        // Mode 5: 160×128, 15-bpp, double-buffered. Centred in the 240×160 display.
+        u32 page = (dispcnt & 0x0010) ? 0xA000 : 0x0000;
+        const u16 *src = (const u16 *)(gPCVram + page);
+        int xOff = (240 - 160) / 2;
+        int yOff = (160 - 128) / 2;
+        for (int y = 0; y < 128; y++)
+            for (int x = 0; x < 160; x++)
+                CommitPixel((y + yOff) * 240 + (x + xOff), PlttColorToArgb(src[y * 160 + x]), LAYER_BG2);
+        ApplyColorEffects();
+        return;
+    }
+
     // Affine map dimensions indexed by BGCNT bits 14-15.
     static const int sAffineMapSizes[4] = { 128, 256, 512, 1024 };
 
@@ -631,6 +673,29 @@ static void RenderAndPresent(void)
     PresentFramebuffer();
 }
 
+// Dispatch one pending interrupt to the appropriate gIntrTable handler.
+// This replaces the ARM IntrMain handler from crt0.s (excluded on PC).
+// The bit-to-table mapping mirrors the priority scan in crt0.s IntrMain:
+//   IF bit 0=VBlank→[4], 1=HBlank→[3], 2=VCount→[0], 6=Timer3→[2],
+//   7=Serial→[1], 3-5=Timer0-2→[5-7], 8-11=DMA0-3→[8-11], 12-13→[12-13]
+static void DispatchInterrupts(void)
+{
+    static const int bitToTable[] = {4, 3, 0, 5, 6, 7, 2, 1, 8, 9, 10, 11, 12, 13};
+    if (!READ_REG_U16(REG_OFFSET_IME))
+        return;
+    u16 pending = READ_REG_U16(REG_OFFSET_IE) & READ_REG_U16(REG_OFFSET_IF);
+    for (int i = 0; i < 14; i++)
+    {
+        if (pending & (1 << i))
+        {
+            // Clear the flag before calling the handler (GBA interrupt protocol).
+            WRITE_REG_U16(REG_OFFSET_IF, READ_REG_U16(REG_OFFSET_IF) & ~(1 << i));
+            gIntrTable[bitToTable[i]]();
+            break; // one interrupt per call; re-enter next tick for additional pending
+        }
+    }
+}
+
 static void UpdateDisplayState(void)
 {
     PollInput();
@@ -674,6 +739,7 @@ static void UpdateDisplayState(void)
         WRITE_REG_U16(REG_OFFSET_IF, READ_REG_U16(REG_OFFSET_IF) | INTR_FLAG_VCOUNT);
 
     sPrevDispstat = dispstat;
+    DispatchInterrupts();
 }
 
 static void UpdateTimers(void)

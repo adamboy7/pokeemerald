@@ -18,6 +18,10 @@ static SDL_AudioFormat sAudioFormat = AUDIO_S8;
 #endif
 
 struct SoundInfo gSoundInfo;
+// PC backing variables for the GBA IWRAM locations in include/gba/defines.h.
+struct SoundInfo *gSoundInfoPtr = NULL;
+u16 gIntrCheck = 0;
+void *gIntrVector = NULL;
 struct PokemonCrySong gPokemonCrySongs[MAX_POKEMON_CRIES];
 struct MusicPlayerInfo gPokemonCryMusicPlayers[MAX_POKEMON_CRIES];
 struct MusicPlayerInfo gMPlayInfo_BGM;
