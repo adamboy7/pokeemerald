@@ -11,6 +11,8 @@ u16 SetFlashTimerIntr(u8 timerNum, void (**intrFunc)(void));
 u16 IdentifyFlash(void);
 u32 ProgramFlashSectorAndVerify(u16 sectorNum, u8 *src);
 
+// PC-only helper: redirect save data to a specific file path instead of
+// the default "pokeemerald.sav" in the working directory.
 #if PLATFORM_PC
 void SetFlashFilePath(const char *path);
 #endif

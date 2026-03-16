@@ -584,6 +584,9 @@ void TransferTilesetAnimsBuffer(void)
     sTilesetDMA3TransferBufferSize = 0;
 }
 
+// On GBA the tileset animation VDest pointers are set to fixed VRAM addresses
+// at compile time via absolute offsets. On PC, VRAM is a heap pointer, so the
+// offsets must be computed at runtime relative to gPCVram.
 #if PLATFORM_PC
 static void InitTilesetAnimVDestPtrs(void)
 {
@@ -602,6 +605,7 @@ static void InitTilesetAnimVDestPtrs(void)
 void InitTilesetAnimations(void)
 {
     ResetTilesetAnimBuffer();
+    // VDest pointers depend on the runtime VRAM base address on PC (see above).
 #if PLATFORM_PC
     InitTilesetAnimVDestPtrs();
 #endif

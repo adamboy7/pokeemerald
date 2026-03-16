@@ -1,4 +1,7 @@
 	.equ	W00,	0x80		@ WAIT
+@ On PC, voicegroup data is not embedded in ROM at fixed addresses.
+@ Instead, runtime-computed offsets for each voicegroup are provided
+@ by pc_voicegroup_offsets.inc so the PC audio engine can locate them.
 #if PLATFORM_PC
 	.include "voicegroups/pc_voicegroup_offsets.inc"
 #endif

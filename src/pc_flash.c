@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <limits.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #ifndef PATH_MAX
@@ -16,6 +17,7 @@
 static char sSaveFilePath[PATH_MAX] = "pokeemerald.sav";
 
 static u8 sFlashMemory[SECTORS_COUNT * SECTOR_SIZE];
+static int sDirty = 0;
 
 // Required global variables from flash_internal.h
 u16 gFlashNumRemainingBytes;
@@ -32,6 +34,8 @@ u8 gFlashTimeoutFlag;
 static u16 ProgramFlashByte_PC(u16 sectorNum, u32 offset, u8 data);
 static u16 ProgramFlashSector_PC(u16 sectorNum, u8 *src);
 static u16 EraseFlashSector_PC(u16 sectorNum);
+static u16 EraseFlashChip_PC(void);
+static u16 WaitForFlashWrite_PC(u8 phase, u8 *addr, u8 lastData);
 
 void SetFlashFilePath(const char *path)
 {
@@ -56,6 +60,14 @@ static void FlushFlashMemory(void)
 
     if (fclose(file) != 0)
         perror("fclose");
+
+    sDirty = 0;
+}
+
+static void FlushFlashMemoryAtExit(void)
+{
+    if (sDirty)
+        FlushFlashMemory();
 }
 
 static void LoadFlashMemory(void)
@@ -92,9 +104,12 @@ u16 SetFlashTimerIntr(u8 timerNum, void (**intrFunc)(void))
 u16 IdentifyFlash(void)
 {
     LoadFlashMemory();
+    atexit(FlushFlashMemoryAtExit);
     ProgramFlashByte = ProgramFlashByte_PC;
     ProgramFlashSector = ProgramFlashSector_PC;
     EraseFlashSector = EraseFlashSector_PC;
+    EraseFlashChip = EraseFlashChip_PC;
+    WaitForFlashWrite = WaitForFlashWrite_PC;
     return 0;
 }
 
@@ -115,7 +130,7 @@ u16 ProgramFlashByte_PC(u16 sectorNum, u32 offset, u8 data)
         return 0x8000;
 
     sFlashMemory[sectorNum * SECTOR_SIZE + offset] = data;
-    FlushFlashMemory();
+    sDirty = 1;
     return 0;
 }
 
@@ -126,6 +141,21 @@ u16 EraseFlashSector_PC(u16 sectorNum)
 
     memset(sFlashMemory + sectorNum * SECTOR_SIZE, 0xFF, SECTOR_SIZE);
     FlushFlashMemory();
+    return 0;
+}
+
+static u16 EraseFlashChip_PC(void)
+{
+    memset(sFlashMemory, 0xFF, sizeof(sFlashMemory));
+    FlushFlashMemory();
+    return 0;
+}
+
+static u16 WaitForFlashWrite_PC(u8 phase, u8 *addr, u8 lastData)
+{
+    (void)phase;
+    (void)addr;
+    (void)lastData;
     return 0;
 }
 

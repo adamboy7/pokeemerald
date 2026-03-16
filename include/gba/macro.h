@@ -56,10 +56,11 @@
 
 #define DmaSetUnchecked(dmaNum, src, dest, control)                                   \
 {                                                                                    \
-    WRITE_REG_U32(REG_OFFSET_DMA##dmaNum##SAD, (u32)(src));                           \
-    WRITE_REG_U32(REG_OFFSET_DMA##dmaNum##DAD, (u32)(dest));                          \
+    WRITE_REG_U32(REG_OFFSET_DMA##dmaNum##SAD, (u32)(uintptr_t)(src));                \
+    WRITE_REG_U32(REG_OFFSET_DMA##dmaNum##DAD, (u32)(uintptr_t)(dest));               \
     WRITE_REG_U32(REG_OFFSET_DMA##dmaNum##CNT, (u32)(control));                       \
     READ_REG_U32(REG_OFFSET_DMA##dmaNum##CNT);                                        \
+    PC_DMA_RECORD(dmaNum, src, dest);                                                  \
 }
 
 #if MODERN

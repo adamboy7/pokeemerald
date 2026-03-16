@@ -70,6 +70,9 @@ COMMON_DATA u8 gLinkVSyncDisabled = 0;
 COMMON_DATA u32 IntrMain_Buffer[0x200] = {0};
 COMMON_DATA s8 gPcmDmaCounter = 0;
 
+// On GBA these regions live at fixed hardware addresses (see defines.h).
+// On PC they are heap-allocated at startup so the game can access them
+// through the same VRAM/PLTT/OAM macros without faulting.
 #if PLATFORM_PC
 u8 *gPCVram = NULL;
 u8 *gPCPltt = NULL;
@@ -107,6 +110,8 @@ void AgbMain(void)
     InitIntrHandlers();
     m4aSoundInit();
     EnableVCountIntrAtLine150();
+// RFU (wireless adapter) uses GBA serial hardware and its own interrupt-
+// driven protocol. None of that hardware exists on PC, so skip it entirely.
 #if !PLATFORM_PC
     InitRFU();
 #endif
@@ -145,6 +150,8 @@ void AgbMain(void)
          && JOY_HELD_RAW(A_BUTTON)
          && JOY_HELD_RAW(B_START_SELECT) == B_START_SELECT)
         {
+// Politely shut down the wireless adapter before resetting on GBA.
+// The RFU module is not present on PC, so skip the shutdown call.
 #if !PLATFORM_PC
             rfu_REQ_stopMode();
             rfu_waitREQComplete();
@@ -309,9 +316,15 @@ void InitIntrHandlers(void)
     for (i = 0; i < INTR_COUNT; i++)
         gIntrTable[i] = gIntrTableTemplate[i];
 
+// On GBA the interrupt handler (IntrMain) is ARM assembly that must run
+// from IWRAM for speed; copy it there and point the hardware interrupt
+// vector at the copy. On PC, IntrMain is a zero-filled stub and
+// INTR_VECTOR is a redirected global — neither step is needed.
+#if !PLATFORM_PC
     DmaCopy32(3, IntrMain, IntrMain_Buffer, sizeof(IntrMain_Buffer));
 
     INTR_VECTOR = IntrMain_Buffer;
+#endif
 
     SetVBlankCallback(NULL);
     SetHBlankCallback(NULL);
@@ -423,7 +436,14 @@ static void WaitForVBlank(void)
     gMain.intrCheck &= ~INTR_FLAG_VBLANK;
 
     while (!(gMain.intrCheck & INTR_FLAG_VBLANK))
-        ;
+    {
+#if PLATFORM_PC
+        // Drive the display-state simulation so VBlank can be dispatched.
+        // On GBA this spin is woken by a real hardware interrupt; on PC we
+        // must manually pump UpdateDisplayState() via a register read.
+        PlatformReadReg(REG_OFFSET_VCOUNT);
+#endif
+    }
 }
 
 void SetTrainerHillVBlankCounter(u32 *counter)

@@ -236,6 +236,8 @@ static const u8 sUnusedData[] = {0x00, 0xFF, 0xFE, 0xFF, 0x00};
 
 bool8 IsWirelessAdapterConnected(void)
 {
+    // Wireless adapter detection requires the GBA serial port and the RFU
+    // library. Neither is available on PC, so always report not connected.
 #if !PLATFORM_PC
     SetWirelessCommType1();
     InitRFUAPI();
@@ -388,6 +390,7 @@ void OpenLink(void)
     }
     else
     {
+        // RFU wireless init requires the GBA serial hardware; skip on PC.
 #if !PLATFORM_PC
         InitRFUAPI();
 #endif
@@ -1719,6 +1722,8 @@ static void CB2_PrintErrorMessage(void)
         {
             if (JOY_NEW(A_BUTTON))
             {
+                // Shut down the wireless adapter gracefully before resetting.
+                // The RFU module is not present on PC so skip this step.
 #if !PLATFORM_PC
                 rfu_REQ_stopMode();
                 rfu_waitREQComplete();

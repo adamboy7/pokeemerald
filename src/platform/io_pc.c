@@ -17,6 +17,13 @@ extern void (*gIntrTable[])(void);
 #define DMA_CHANNELS 4
 #define TIMER_COUNT 4
 
+// Full-width (host-pointer-sized) DMA address shadow.
+// DmaSetUnchecked (include/gba/macro.h) truncates src/dst to u32 when writing
+// to gIoRegisters, which loses the upper 32 bits on 64-bit builds.  These
+// arrays preserve the full pointer so HandleDmas can use correct addresses.
+uintptr_t gPCDmaSrc[DMA_CHANNELS];
+uintptr_t gPCDmaDst[DMA_CHANNELS];
+
 struct TimerState
 {
     u16 reload;
@@ -747,31 +754,47 @@ static void UpdateTimers(void)
     Uint64 now = SDL_GetPerformanceCounter();
     Uint64 freq = SDL_GetPerformanceFrequency();
     static const u32 sPrescaler[4] = {1, 64, 256, 1024};
+    // Track per-timer overflow counts so cascade-mode timers can be driven.
+    u32 overflowCount[TIMER_COUNT] = {0, 0, 0, 0};
 
     for (int i = 0; i < TIMER_COUNT; i++)
     {
         struct TimerState *t = &sTimers[i];
-        if (t->control & TIMER_ENABLE)
+        if (!(t->control & TIMER_ENABLE))
+            continue;
+
+        u64 ticks = 0;
+        if (t->control & TIMER_CASCADE)
+        {
+            // Cascade: this timer is incremented by the previous timer's overflows.
+            if (i > 0)
+                ticks = overflowCount[i - 1];
+        }
+        else
         {
             Uint64 diff = now - t->lastTick;
             u64 cycles = diff * 16777216ULL / freq;
-            cycles /= sPrescaler[t->control & 3];
-            if (cycles)
-            {
-                u32 value = t->counter + cycles;
-                if (value >= 0x10000)
-                {
-                    t->counter = t->reload + (value & 0xFFFF);
-                    if (t->control & TIMER_INTR_ENABLE)
-                        WRITE_REG_U16(REG_OFFSET_IF, READ_REG_U16(REG_OFFSET_IF) | (INTR_FLAG_TIMER0 << i));
-                }
-                else
-                {
-                    t->counter = (u16)value;
-                }
+            ticks = cycles / sPrescaler[t->control & 3];
+            if (ticks)
                 t->lastTick = now;
+        }
+
+        if (ticks)
+        {
+            u32 value = (u32)t->counter + (u32)ticks;
+            if (value >= 0x10000)
+            {
+                overflowCount[i] = (value - t->reload) / (0x10000 - t->reload);
+                t->counter = (u16)(t->reload + (value - 0x10000) % (0x10000 - t->reload));
+                if (t->control & TIMER_INTR_ENABLE)
+                    WRITE_REG_U16(REG_OFFSET_IF, READ_REG_U16(REG_OFFSET_IF) | (INTR_FLAG_TIMER0 << i));
+            }
+            else
+            {
+                t->counter = (u16)value;
             }
         }
+
         WRITE_REG_U16(REG_OFFSET_TM0CNT_L + i * 4, t->counter);
         WRITE_REG_U16(REG_OFFSET_TM0CNT_H + i * 4, t->control);
     }
@@ -779,71 +802,88 @@ static void UpdateTimers(void)
 
 static void HandleDmas(void)
 {
+    u16 dispstat = READ_REG_U16(REG_OFFSET_DISPSTAT);
+    bool inVBlank = (dispstat & DISPSTAT_VBLANK) != 0;
+    bool inHBlank = (dispstat & DISPSTAT_HBLANK) != 0;
+
     for (int i = 0; i < DMA_CHANNELS; i++)
     {
         u32 base = REG_OFFSET_DMA0 + i * 12;
         u16 control = READ_REG_U16(base + 10);
-        if (control & DMA_ENABLE)
+        if (!(control & DMA_ENABLE))
+            continue;
+
+        // Check start condition: only fire the DMA during the requested phase.
+        u16 startMode = control & DMA_START_MASK;
+        if (startMode == DMA_START_VBLANK && !inVBlank)
+            continue;
+        if (startMode == DMA_START_HBLANK && !inHBlank)
+            continue;
+        // DMA_START_SPECIAL is used for video-capture / sound FIFO — treated as
+        // immediate for compatibility (game code enabling these expects them to fire).
+
+        // Use the full-width shadow pointers to avoid 64-bit truncation.
+        // gPCDmaSrc/gPCDmaDst are written by DmaSetUnchecked (via PC_DMA_RECORD)
+        // before the DMA_ENABLE bit is set; they hold the complete host address.
+        u8 *srcPtr = (u8 *)gPCDmaSrc[i];
+        u8 *dstPtr = (u8 *)gPCDmaDst[i];
+        u16 count = READ_REG_U16(base + 8);
+        u32 units = count;
+        if (units == 0)
+            units = (i == 3) ? 0x10000 : 0x4000;
+
+        u32 unit = (control & DMA_32BIT) ? 4 : 2;
+        s32 srcStep = unit;
+        s32 dstStep = unit;
+
+        switch (control & (DMA_SRC_DEC | DMA_SRC_FIXED))
         {
-            u32 src = READ_REG_U32(base);
-            u32 dst = READ_REG_U32(base + 4);
-            u8 *srcPtr = (u8 *)(uintptr_t)src;
-            u8 *dstPtr = (u8 *)(uintptr_t)dst;
-            u16 count = READ_REG_U16(base + 8);
-            u32 units = count;
-            if (units == 0)
-                units = (i == 3) ? 0x10000 : 0x4000;
-
-            u32 unit = (control & DMA_32BIT) ? 4 : 2;
-            s32 srcStep = unit;
-            s32 dstStep = unit;
-
-            switch (control & (DMA_SRC_DEC | DMA_SRC_FIXED))
-            {
-            case DMA_SRC_DEC:
-                srcStep = -((s32)unit);
-                break;
-            case DMA_SRC_FIXED:
-                srcStep = 0;
-                break;
-            }
-
-            switch (control & (DMA_DEST_DEC | DMA_DEST_FIXED | DMA_DEST_RELOAD))
-            {
-            case DMA_DEST_DEC:
-                dstStep = -((s32)unit);
-                break;
-            case DMA_DEST_FIXED:
-                dstStep = 0;
-                break;
-            default:
-                break;
-            }
-
-            for (u32 j = 0; j < units; j++)
-            {
-                if (unit == 4)
-                    *(u32 *)dstPtr = *(u32 *)srcPtr;
-                else
-                    *(u16 *)dstPtr = *(u16 *)srcPtr;
-                srcPtr += srcStep;
-                dstPtr += dstStep;
-            }
-
-            WRITE_REG_U32(base, (u32)(uintptr_t)srcPtr);
-            WRITE_REG_U32(base + 4, (u32)(uintptr_t)dstPtr);
-
-            if (!(control & DMA_REPEAT))
-            {
-                control &= ~DMA_ENABLE;
-                WRITE_REG_U16(base + 10, control);
-            }
-
-            if (control & DMA_INTR_ENABLE)
-                WRITE_REG_U16(REG_OFFSET_IF, READ_REG_U16(REG_OFFSET_IF) | (INTR_FLAG_DMA0 << i));
-
-            RenderAndPresent();
+        case DMA_SRC_DEC:
+            srcStep = -((s32)unit);
+            break;
+        case DMA_SRC_FIXED:
+            srcStep = 0;
+            break;
         }
+
+        switch (control & (DMA_DEST_DEC | DMA_DEST_FIXED | DMA_DEST_RELOAD))
+        {
+        case DMA_DEST_DEC:
+            dstStep = -((s32)unit);
+            break;
+        case DMA_DEST_FIXED:
+            dstStep = 0;
+            break;
+        default:
+            break;
+        }
+
+        for (u32 j = 0; j < units; j++)
+        {
+            if (unit == 4)
+                *(u32 *)dstPtr = *(u32 *)srcPtr;
+            else
+                *(u16 *)dstPtr = *(u16 *)srcPtr;
+            srcPtr += srcStep;
+            dstPtr += dstStep;
+        }
+
+        // Write back updated addresses to both shadow and I/O register array.
+        gPCDmaSrc[i] = (uintptr_t)srcPtr;
+        gPCDmaDst[i] = (uintptr_t)dstPtr;
+        WRITE_REG_U32(base, (u32)(uintptr_t)srcPtr);
+        WRITE_REG_U32(base + 4, (u32)(uintptr_t)dstPtr);
+
+        if (!(control & DMA_REPEAT))
+        {
+            control &= ~DMA_ENABLE;
+            WRITE_REG_U16(base + 10, control);
+        }
+
+        if (control & DMA_INTR_ENABLE)
+            WRITE_REG_U16(REG_OFFSET_IF, READ_REG_U16(REG_OFFSET_IF) | (INTR_FLAG_DMA0 << i));
+
+        RenderAndPresent();
     }
 }
 

@@ -8,6 +8,9 @@ void m4aSoundVSyncOn(void);
 
 void m4aSoundInit(void);
 void m4aSoundMain(void);
+// SDL audio must be closed cleanly on exit to avoid driver errors.
+// This function is registered via atexit() in pc_main.c; it has no
+// GBA equivalent since the hardware just powers off.
 #if PLATFORM_PC
 void m4aSoundShutdown(void);
 #endif

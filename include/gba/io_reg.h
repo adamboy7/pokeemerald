@@ -347,6 +347,10 @@
 
 #define REG_ADDR_WAITCNT     (REG_BASE + REG_OFFSET_WAITCNT)
 
+// On GBA, I/O registers live at the hardware base address 0x4000000.
+// On PC they are backed by a shadow array (gIoRegisters) in pc_io_reg.c.
+// Re-defining REG_BASE here makes all REG_ADDR_* macros point into that
+// array, so the register access helpers below work without changes.
 #if PLATFORM_PC
 extern u8 gIoRegisters[0x400];
 #undef REG_BASE
@@ -690,6 +694,7 @@ extern u8 gIoRegisters[0x400];
 #define TIMER_64CLK       0x01
 #define TIMER_256CLK      0x02
 #define TIMER_1024CLK     0x03
+#define TIMER_CASCADE     0x04  // bit 2: clocked by previous timer overflow
 #define TIMER_INTR_ENABLE 0x40
 #define TIMER_ENABLE      0x80
 

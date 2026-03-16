@@ -10,6 +10,7 @@
 #include <SDL2/SDL.h>
 #endif
 #include "m4a.h"
+#include "platform/io.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -46,24 +47,39 @@ void RegisterRamReset(u32 resetFlags)
         m4aSoundInit();
 }
 
-void IntrWait(u32 flags, u32 unused)
+void IntrWait(u32 clearFlags, u32 intrFlags)
 {
-    (void)flags;
-    (void)unused;
+    // On GBA the BIOS clears the matching bits in INTR_CHECK before waiting
+    // (when clearFlags != 0), then spins until at least one requested flag is set.
+    // On PC we drive UpdateDisplayState() via PlatformReadReg so that the
+    // display simulation advances and DispatchInterrupts() can fire.
+    if (clearFlags)
+        INTR_CHECK &= ~(u16)intrFlags;
+
 #ifdef USE_SDL
-    // Use SDL's timing facilities when available for portability.
-    SDL_Delay(1000 / 60);
+    // Spin-pump the register read loop until the interrupt fires or a
+    // maximum of one frame elapses to prevent hanging on unknown flags.
+    Uint64 start = SDL_GetPerformanceCounter();
+    Uint64 freq  = SDL_GetPerformanceFrequency();
+    Uint64 limit = freq / 60; // 1 frame timeout
+
+    while (!(INTR_CHECK & (u16)intrFlags))
+    {
+        PlatformReadReg(REG_OFFSET_VCOUNT);
+        if (SDL_GetPerformanceCounter() - start >= limit)
+            break;
+    }
 #else
-    // Approximate a single-frame wait using the standard C library.
-    clock_t start = clock();
+    clock_t start    = clock();
     clock_t duration = CLOCKS_PER_SEC / 60;
-    while (clock() - start < duration) { }
+    while (!(INTR_CHECK & (u16)intrFlags) && clock() - start < duration)
+        PlatformReadReg(REG_OFFSET_VCOUNT);
 #endif
 }
 
 void VBlankIntrWait(void)
 {
-    IntrWait(0, 0);
+    IntrWait(1, INTR_FLAG_VBLANK);
 }
 
 u16 Sqrt(u32 num)
@@ -118,8 +134,7 @@ void CpuFastSet(const void *src, void *dest, u32 control)
     u32 *d = dest;
     u32 value = *s;
 
-    // CpuFastSet operates in units of 8 words.
-    for (u32 i = 0; i < count * 8; i++)
+    for (u32 i = 0; i < count; i++)
         d[i] = fixed ? value : s[i];
 }
 

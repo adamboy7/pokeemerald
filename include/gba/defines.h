@@ -6,6 +6,9 @@
 #define TRUE  1
 #define FALSE 0
 
+// GBA uses custom linker sections to place hot data in fast IWRAM/EWRAM.
+// The PC linker has no such sections, so strip the attributes so the
+// annotated variables are treated as ordinary globals.
 #if PLATFORM_PC
 #define IWRAM_DATA
 #define EWRAM_DATA
@@ -47,6 +50,9 @@ extern void *gIntrVector;
 #define IWRAM_START 0x03000000
 #define IWRAM_END   (IWRAM_START + 0x8000)
 
+// On GBA, palette/VRAM/OAM are at fixed memory-mapped addresses.
+// On PC they are heap-allocated pointers (declared in main.c, extern'd
+// below) so that all address arithmetic still works through the same macros.
 #if !PLATFORM_PC
 #define PLTT          0x5000000
 #define BG_PLTT       PLTT

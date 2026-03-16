@@ -5,6 +5,7 @@
 #include "gpu_regs.h"
 #include "task.h"
 #include "constants/rgb.h"
+// memcpy is used on PC in place of DMA for palette transfers (see below).
 #if PLATFORM_PC
 #include <string.h>
 #endif
@@ -109,6 +110,7 @@ void TransferPlttBuffer(void)
     {
         void *src = gPlttBufferFaded;
         void *dest = (void *)PLTT;
+        // DMA requires hardware channels that don't exist on PC; use memcpy instead.
 #if PLATFORM_PC
         memcpy(dest, src, PLTT_SIZE);
 #else
@@ -153,6 +155,8 @@ void ResetPaletteFade(void)
 static void ReadPlttIntoBuffers(void)
 {
     u16 *pltt = (u16 *)PLTT;
+    // On PC, PLTT is a plain byte array so a bulk memcpy is safe and faster
+    // than the index loop the GBA build uses to avoid misaligned 16-bit reads.
 #if PLATFORM_PC
     memcpy(gPlttBufferUnfaded, pltt, PLTT_SIZE);
     memcpy(gPlttBufferFaded, pltt, PLTT_SIZE);

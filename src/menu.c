@@ -1911,6 +1911,8 @@ void BgDmaFill(u32 bg, u8 value, int offset, int size)
 {
     int temp = (!GetBgAttribute(bg, BG_ATTR_PALETTEMODE)) ? 32 : 64;
     u32 addr = (GetBgAttribute(bg, BG_ATTR_CHARBASEINDEX) * 0x4000) + (GetBgAttribute(bg, BG_ATTR_BASETILE) + offset) * temp;
+    // On GBA VRAM is an integer address so (void*) cast is required.
+    // On PC VRAM is already a pointer (u8*), making the cast a type error.
     RequestDma3Fill(value << 24 | value << 16 | value << 8 | value,
 #if PLATFORM_PC
                     VRAM + addr,

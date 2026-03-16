@@ -310,6 +310,9 @@ struct MusicPlayerTrack
     u32 unk_3C;
     u8 *cmdPtr;
     u8 *patternStack[3];
+    // The PC music player (pc_m4a_stub.c) tracks pitch and modulation depth
+    // as explicit fields. On GBA these values are encoded differently in the
+    // ARM m4a engine and not needed as separate struct members.
 #if PLATFORM_PC
     s16 pitch;
     u8 modDepth;
