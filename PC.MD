@@ -104,9 +104,3 @@ This branch adds a native desktop build of pokeemerald using SDL2. It runs the o
 | [README.md](README.md) | PC build prerequisites and instructions | Guides contributors on installing SDL2 and running `make pc` |
 
 ---
-
-## Deleted Files
-
-| File | Reason |
-|------|--------|
-| `src/platform/io_stub.c` | Was a minimal fallback `PlatformReadReg`/`PlatformWriteReg` backed by the shadow register array. `io_pc.c` already provides a complete implementation of both functions, and the Makefile already excluded `io_stub.o` from all builds, making it dead code. |
