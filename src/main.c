@@ -1,5 +1,7 @@
 #include "global.h"
+#if PLATFORM_PC
 #include "platform/io.h"
+#endif
 #include "crt0.h"
 #include "malloc.h"
 #include "link.h"
@@ -105,13 +107,17 @@ void AgbMain(void)
 #endif //MODERN
     *(vu16 *)BG_PLTT = RGB_WHITE; // Set the backdrop to white on startup
     InitGpuRegManager();
+#if PLATFORM_PC
     PlatformWriteReg(REG_OFFSET_WAITCNT, WAITCNT_PREFETCH_ENABLE | WAITCNT_WS0_S_1 | WAITCNT_WS0_N_3);
+#else
+    REG_WAITCNT = WAITCNT_PREFETCH_ENABLE | WAITCNT_WS0_S_1 | WAITCNT_WS0_N_3;
+#endif
     InitKeys();
     InitIntrHandlers();
     m4aSoundInit();
     EnableVCountIntrAtLine150();
-// RFU (wireless adapter) uses GBA serial hardware and its own interrupt-
-// driven protocol. None of that hardware exists on PC, so skip it entirely.
+    // RFU (wireless adapter) uses GBA serial hardware and its own interrupt-
+    // driven protocol. None of that hardware exists on PC, so skip it entirely.
 #if !PLATFORM_PC
     InitRFU();
 #endif
@@ -150,9 +156,9 @@ void AgbMain(void)
          && JOY_HELD_RAW(A_BUTTON)
          && JOY_HELD_RAW(B_START_SELECT) == B_START_SELECT)
         {
-// Politely shut down the wireless adapter before resetting on GBA.
-// The RFU module is not present on PC, so skip the shutdown call.
-#if !PLATFORM_PC
+            // Politely shut down the wireless adapter before resetting on GBA.
+            // The RFU module is not present on PC, so skip the shutdown call.
+#if PLATFORM_GBA
             rfu_REQ_stopMode();
             rfu_waitREQComplete();
 #endif
@@ -218,11 +224,19 @@ void SetMainCallback2(MainCallback callback)
     gMain.state = 0;
 }
 
+#if PLATFORM_PC
 void StartTimer1(void)
 {
     PlatformWriteReg(REG_OFFSET_TM1CNT_H, 0x80);
 }
+#else
+void StartTimer1(void)
+{
+    REG_TM1CNT_H = 0x80;
+}
+#endif
 
+#if PLATFORM_PC
 void SeedRngAndSetTrainerId(void)
 {
     u16 val = PlatformReadReg(REG_OFFSET_TM1CNT_L);
@@ -230,6 +244,15 @@ void SeedRngAndSetTrainerId(void)
     PlatformWriteReg(REG_OFFSET_TM1CNT_H, 0);
     sTrainerId = val;
 }
+#else
+void SeedRngAndSetTrainerId(void)
+{
+    u16 val = REG_TM1CNT_L;
+    SeedRng(val);
+    REG_TM1CNT_H = 0;
+    sTrainerId = val;
+}
+#endif
 
 u16 GetGeneratedTrainerIdLower(void)
 {
@@ -267,7 +290,11 @@ void InitKeys(void)
 
 static void ReadKeys(void)
 {
+#if PLATFORM_PC
     u16 keyInput = PlatformReadReg(REG_OFFSET_KEYINPUT) ^ KEYS_MASK;
+#else
+    u16 keyInput = REG_KEYINPUT ^ KEYS_MASK;
+#endif
     gMain.newKeysRaw = keyInput & ~gMain.heldKeysRaw;
     gMain.newKeys = gMain.newKeysRaw;
     gMain.newAndRepeatedKeys = gMain.newKeysRaw;
@@ -316,11 +343,11 @@ void InitIntrHandlers(void)
     for (i = 0; i < INTR_COUNT; i++)
         gIntrTable[i] = gIntrTableTemplate[i];
 
-// On GBA the interrupt handler (IntrMain) is ARM assembly that must run
-// from IWRAM for speed; copy it there and point the hardware interrupt
-// vector at the copy. On PC, IntrMain is a zero-filled stub and
-// INTR_VECTOR is a redirected global — neither step is needed.
-#if !PLATFORM_PC
+    // On GBA the interrupt handler (IntrMain) is ARM assembly that must run
+    // from IWRAM for speed; copy it there and point the hardware interrupt
+    // vector at the copy. On PC, IntrMain is a zero-filled stub and
+    // INTR_VECTOR is a redirected global — neither step is needed.
+#if PLATFORM_GBA
     DmaCopy32(3, IntrMain, IntrMain_Buffer, sizeof(IntrMain_Buffer));
 
     INTR_VECTOR = IntrMain_Buffer;
@@ -330,7 +357,11 @@ void InitIntrHandlers(void)
     SetHBlankCallback(NULL);
     SetSerialCallback(NULL);
 
+#if PLATFORM_PC
     PlatformWriteReg(REG_OFFSET_IME, 1);
+#else
+    REG_IME = 1;
+#endif
 
     EnableInterrupts(INTR_FLAG_VBLANK);
 }
@@ -431,20 +462,25 @@ static void SerialIntr(void)
 static void IntrDummy(void)
 {}
 
+#if PLATFORM_PC
+// On PC the VBlank interrupt is simulated; pumping a register read drives the
+// display-state update that dispatches it. On GBA the spin is woken by hardware.
 static void WaitForVBlank(void)
 {
     gMain.intrCheck &= ~INTR_FLAG_VBLANK;
 
     while (!(gMain.intrCheck & INTR_FLAG_VBLANK))
-    {
-#if PLATFORM_PC
-        // Drive the display-state simulation so VBlank can be dispatched.
-        // On GBA this spin is woken by a real hardware interrupt; on PC we
-        // must manually pump UpdateDisplayState() via a register read.
         PlatformReadReg(REG_OFFSET_VCOUNT);
-#endif
-    }
 }
+#else
+static void WaitForVBlank(void)
+{
+    gMain.intrCheck &= ~INTR_FLAG_VBLANK;
+
+    while (!(gMain.intrCheck & INTR_FLAG_VBLANK))
+        ;
+}
+#endif
 
 void SetTrainerHillVBlankCounter(u32 *counter)
 {
@@ -458,7 +494,11 @@ void ClearTrainerHillVBlankCounter(void)
 
 void DoSoftReset(void)
 {
+#if PLATFORM_PC
     PlatformWriteReg(REG_OFFSET_IME, 0);
+#else
+    REG_IME = 0;
+#endif
     m4aSoundVSyncOff();
     ScanlineEffect_Stop();
     DmaStop(1);

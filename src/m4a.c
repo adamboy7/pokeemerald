@@ -421,11 +421,19 @@ void SampleFreqSet(u32 freq)
 
     m4aSoundVSyncOn();
 
+#if PLATFORM_PC
     while (READ_REG_U8(REG_OFFSET_VCOUNT) == 159)
         ;
 
     while (READ_REG_U8(REG_OFFSET_VCOUNT) != 159)
         ;
+#else
+    while (*(vu8 *)REG_ADDR_VCOUNT == 159)
+        ;
+
+    while (*(vu8 *)REG_ADDR_VCOUNT != 159)
+        ;
+#endif
 
     REG_TM0CNT_H = TIMER_ENABLE | TIMER_1CLK;
 }

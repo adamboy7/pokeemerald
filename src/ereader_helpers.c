@@ -705,7 +705,11 @@ int EReaderHandleTransfer(u8 mode, size_t size, const void *data, void *recvBuff
 static u16 DetermineSendRecvState(u8 mode)
 {
     bool16 resp;
+#if PLATFORM_PC
     if ((READ_REG_U32(REG_OFFSET_SIOCNT) & (SIO_MULTI_SI | SIO_MULTI_SD)) == SIO_MULTI_SD && mode)
+#else
+    if ((*(vu32 *)REG_ADDR_SIOCNT & (SIO_MULTI_SI | SIO_MULTI_SD)) == SIO_MULTI_SD && mode)
+#endif
         resp = sSendRecvMgr.isParent = TRUE;
     else
         resp = sSendRecvMgr.isParent = FALSE;

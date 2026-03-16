@@ -154,14 +154,17 @@ void ResetPaletteFade(void)
 
 static void ReadPlttIntoBuffers(void)
 {
+#if PLATFORM_GBA
+    u16 i;
+#endif
     u16 *pltt = (u16 *)PLTT;
+
     // On PC, PLTT is a plain byte array so a bulk memcpy is safe and faster
     // than the index loop the GBA build uses to avoid misaligned 16-bit reads.
 #if PLATFORM_PC
     memcpy(gPlttBufferUnfaded, pltt, PLTT_SIZE);
     memcpy(gPlttBufferFaded, pltt, PLTT_SIZE);
 #else
-    u16 i;
     for (i = 0; i < PLTT_BUFFER_SIZE; i++)
     {
         gPlttBufferUnfaded[i] = pltt[i];

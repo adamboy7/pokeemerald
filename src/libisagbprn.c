@@ -1,6 +1,8 @@
 #include <stdarg.h>
 #include <stdio.h>
+#if PLATFORM_PC
 #include <stdlib.h>
+#endif
 #include "gba/gba.h"
 #include "config.h"
 #include "malloc.h"

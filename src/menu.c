@@ -1795,6 +1795,8 @@ void *DecompressAndCopyTileDataToVram(u8 bgId, const void *src, u32 size, u16 of
     return NULL;
 }
 
+#if PLATFORM_PC
+// On PC, pointers are 64-bit so uintptr_t is required to store/retrieve them via task args.
 void DecompressAndLoadBgGfxUsingHeap(u8 bgId, const void *src, u32 size, u16 offset, u8 mode)
 {
     u32 sizeOut;
@@ -1808,7 +1810,23 @@ void DecompressAndLoadBgGfxUsingHeap(u8 bgId, const void *src, u32 size, u16 off
         SetWordTaskArg(taskId, 1, (uintptr_t)ptr);
     }
 }
+#else
+void DecompressAndLoadBgGfxUsingHeap(u8 bgId, const void *src, u32 size, u16 offset, u8 mode)
+{
+    u32 sizeOut;
+    void *ptr = malloc_and_decompress(src, &sizeOut);
+    if (!size)
+        size = sizeOut;
+    if (ptr)
+    {
+        u8 taskId = CreateTask(task_free_buf_after_copying_tile_data_to_vram, 0);
+        gTasks[taskId].data[0] = copy_decompressed_tile_data_to_vram(bgId, ptr, size, offset, mode);
+        SetWordTaskArg(taskId, 1, (u32)ptr);
+    }
+}
+#endif
 
+#if PLATFORM_PC
 void task_free_buf_after_copying_tile_data_to_vram(u8 taskId)
 {
     if (!CheckForSpaceForDma3Request(gTasks[taskId].data[0]))
@@ -1817,6 +1835,16 @@ void task_free_buf_after_copying_tile_data_to_vram(u8 taskId)
         DestroyTask(taskId);
     }
 }
+#else
+void task_free_buf_after_copying_tile_data_to_vram(u8 taskId)
+{
+    if (!CheckForSpaceForDma3Request(gTasks[taskId].data[0]))
+    {
+        Free((void *)GetWordTaskArg(taskId, 1));
+        DestroyTask(taskId);
+    }
+}
+#endif
 
 void *malloc_and_decompress(const void *src, u32 *size)
 {
@@ -1907,20 +1935,22 @@ void ResetBgPositions(void)
     ChangeBgY(3, 0, BG_COORD_SET);
 }
 
+#if PLATFORM_PC
+// On PC, VRAM is already a pointer (u8*) so no (void*) cast is needed for pointer arithmetic.
 void BgDmaFill(u32 bg, u8 value, int offset, int size)
 {
     int temp = (!GetBgAttribute(bg, BG_ATTR_PALETTEMODE)) ? 32 : 64;
     u32 addr = (GetBgAttribute(bg, BG_ATTR_CHARBASEINDEX) * 0x4000) + (GetBgAttribute(bg, BG_ATTR_BASETILE) + offset) * temp;
-    // On GBA VRAM is an integer address so (void*) cast is required.
-    // On PC VRAM is already a pointer (u8*), making the cast a type error.
-    RequestDma3Fill(value << 24 | value << 16 | value << 8 | value,
-#if PLATFORM_PC
-                    VRAM + addr,
-#else
-                    (void *)(VRAM + addr),
-#endif
-                    size * temp, 1);
+    RequestDma3Fill(value << 24 | value << 16 | value << 8 | value, VRAM + addr, size * temp, 1);
 }
+#else
+void BgDmaFill(u32 bg, u8 value, int offset, int size)
+{
+    int temp = (!GetBgAttribute(bg, BG_ATTR_PALETTEMODE)) ? 32 : 64;
+    void *addr = (void *)((GetBgAttribute(bg, BG_ATTR_CHARBASEINDEX) * 0x4000) + (GetBgAttribute(bg, BG_ATTR_BASETILE) + offset) * temp);
+    RequestDma3Fill(value << 24 | value << 16 | value << 8 | value, VRAM + addr, size * temp, 1);
+}
+#endif
 
 void AddTextPrinterParameterized3(u8 windowId, u8 fontId, u8 left, u8 top, const u8 *color, s8 speed, const u8 *str)
 {

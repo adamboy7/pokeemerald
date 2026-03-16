@@ -55,7 +55,11 @@ void ProcessDma3Requests(void)
 
         if (bytesTransferred > 40 * 1024)
             return; // don't transfer more than 40 KiB
+#if PLATFORM_PC
         if (READ_REG_U8(REG_OFFSET_VCOUNT) > 224)
+#else
+        if (*(u8 *)REG_ADDR_VCOUNT > 224)
+#endif
             return; // we're about to leave vblank, stop
 
         switch (sDma3Requests[sDma3RequestCursor].mode)

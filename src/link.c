@@ -238,7 +238,7 @@ bool8 IsWirelessAdapterConnected(void)
 {
     // Wireless adapter detection requires the GBA serial port and the RFU
     // library. Neither is available on PC, so always report not connected.
-#if !PLATFORM_PC
+#if PLATFORM_GBA
     SetWirelessCommType1();
     InitRFUAPI();
     if (rfu_LMAN_REQBN_softReset_and_checkID() == RFU_ID)
@@ -391,7 +391,7 @@ void OpenLink(void)
     else
     {
         // RFU wireless init requires the GBA serial hardware; skip on PC.
-#if !PLATFORM_PC
+#if PLATFORM_GBA
         InitRFUAPI();
 #endif
     }
@@ -1724,7 +1724,7 @@ static void CB2_PrintErrorMessage(void)
             {
                 // Shut down the wireless adapter gracefully before resetting.
                 // The RFU module is not present on PC so skip this step.
-#if !PLATFORM_PC
+#if PLATFORM_GBA
                 rfu_REQ_stopMode();
                 rfu_waitREQComplete();
 #endif
@@ -2000,7 +2000,11 @@ static void CheckMasterOrSlave(void)
 {
     u32 terminals;
 
+#if PLATFORM_PC
     terminals = READ_REG_U32(REG_OFFSET_SIOCNT) & (SIO_MULTI_SD | SIO_MULTI_SI);
+#else
+    terminals = *(vu32 *)REG_ADDR_SIOCNT & (SIO_MULTI_SD | SIO_MULTI_SI);
+#endif
     if (terminals == SIO_MULTI_SD && gLink.localId == 0)
     {
         gLink.isMaster = LINK_MASTER;
