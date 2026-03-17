@@ -78,6 +78,12 @@ This branch adds a native desktop build of pokeemerald using SDL2. It runs the o
 | [src/tileset_anims.c](src/tileset_anims.c) | Platform register guards for DMA and GPU register writes | Tileset animation DMA transfers must be routed through the platform layer |
 | [src/ereader_helpers.c](src/ereader_helpers.c) | Guard eReader serial hardware access | The eReader is a GBA-only peripheral |
 | [src/libisagbprn.c](src/libisagbprn.c) | Redirect debug output to host stdout | `isagbprn` debug printing uses GBA serial hardware; on PC it writes to `stdout` |
+| [src/apprentice.c](src/apprentice.c) | `ExecuteFuncAfterButtonPress`/`Task_ExecuteFuncAfterButtonPress`: store and reload function pointer in task `data[0]`/`data[1]` via `uintptr_t` on PC | 64-bit function pointers are 8 bytes; casting to `u32` before splitting discards the upper 32 bits and corrupts the pointer on PC |
+| [src/battle_anim_mons.c](src/battle_anim_mons.c) | `LoadPointerFromVars`: add `uintptr_t` intermediate cast when reconstructing a pointer from two `s16` halves | Without `uintptr_t`, the 32-bit integer result is zero-extended to 64 bits by the implicit `void *` cast, which works only when addresses fit in 32 bits; the explicit cast makes the intent clear and correct |
+| [src/battle_factory_screen.c](src/battle_factory_screen.c) | All Swap-screen function-pointer store (`tFollowUpTaskPtrHi`/`tFollowUpTaskPtrLo`) and load sites use `uintptr_t` on PC | The Swap screen queues follow-up task functions by splitting a pointer across two `u16` task-data slots; on a 64-bit host the pointer may exceed 32 bits, so `uintptr_t` is required to preserve all bits |
+| [src/pokeball.c](src/pokeball.c) | `Task_PlayCryWhenReleasedFromBall`: reconstruct `struct Pokemon *` from `tCryTaskMonPtr1`/`tCryTaskMonPtr2` via `uintptr_t` on PC | Same 32-bit pointer storage pattern as other task-data pointer round-trips; `uintptr_t` prevents truncation on 64-bit hosts |
+| [src/pokemon.c](src/pokemon.c) | `STORE_PTR_IN_TASK` macro: use `uintptr_t` instead of `u32` when splitting a pointer into two task-data halfwords on PC | Pointers stored via this macro (e.g. animation callbacks) are 64-bit on PC; `u32` cast truncates the upper half |
+| [src/util.c](src/util.c) | `LoadWordFromTwoHalfwords`: cast high halfword as `u16` instead of `s16` before shifting on PC | `(s16)h[1] << 16` sign-extends when bit 15 is set, corrupting bits 16–31 of the result; using `u16` keeps the shift unsigned and correct on both 32- and 64-bit hosts |
 
 ### Headers
 
