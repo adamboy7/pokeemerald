@@ -37,6 +37,7 @@ This branch adds a native desktop build of pokeemerald using SDL2. It runs the o
 | [src/pc_link_rfu_stub.c](src/pc_link_rfu_stub.c) | Stubs for all ~100 RFU wireless adapter functions | The RF Unit is a physical GBA accessory; its entire serial/interrupt-driven protocol doesn't exist on PC |
 | [src/pc_stub.c](src/pc_stub.c) | Provides `IntrMain_Buffer` and ROM header fields | On GBA these come from the linker script and ROM header binary; the PC linker has no such section |
 | [src/libgcnmultiboot.c](src/libgcnmultiboot.c) | No-op GameCube multiboot stubs (TODO) | GameCube↔GBA linking is hardware-only |
+| [libagbsyscall/libagbsyscall.c](libagbsyscall/libagbsyscall.c) | PC-only desktop wrappers for GBA BIOS sound driver calls (`SoundDriverInit`, `SoundDriverMain`, `SoundDriverVSync`, etc.), delegating to the `pc_m4a_stub` engine; `SoundBias*` are no-ops; `MusicPlayer*` stubs are weak symbols | On GBA these functions are BIOS `swi` calls in ARM assembly; the PC build has no BIOS, so this file provides equivalent C entry points |
 
 ### Tests
 
@@ -66,7 +67,7 @@ This branch adds a native desktop build of pokeemerald using SDL2. It runs the o
 | [src/dma3_manager.c](src/dma3_manager.c) | Use `PlatformWriteReg` for DMA control register writes | DMA3 VRAM copies must be intercepted by `io_pc.c` to update the software renderer |
 | [src/palette.c](src/palette.c) | Use `PlatformWriteReg` for `BLDCNT`/`BLDALPHA`/`BLDY` writes | Blend registers must be visible to the PC renderer's color-effects pass |
 | [src/m4a.c](src/m4a.c) | PC initialization hooks | Bridges the original m4a init sequence to the `pc_m4a_stub` engine at startup |
-| [src/m4a_tables.c](src/m4a_tables.c) | Minor table adjustments for PC | Frequency and envelope tables tweaked for the C reimplementation |
+| [src/m4a_tables.c](src/m4a_tables.c) | `gMPlayJumpTableTemplate` function-pointer array guarded with `#if PLATFORM_GBA` | `pc_m4a_stub.c` defines its own equivalent table; compiling the GBA version on PC would produce duplicate symbols |
 | [src/agb_flash.c](src/agb_flash.c) | Guard flash chip detection/timing loops with `#if !PLATFORM_PC` | Chip identification uses hardware wait-states that don't exist on PC; `pc_flash.c` handles flash I/O instead |
 | [src/agb_flash_1m.c](src/agb_flash_1m.c) | Same as above | Same reason |
 | [src/agb_flash_le.c](src/agb_flash_le.c) | Same as above | Same reason |
@@ -104,9 +105,7 @@ This branch adds a native desktop build of pokeemerald using SDL2. It runs the o
 | File | What changed | Why |
 |------|-------------|-----|
 | [Makefile](Makefile) | New `pc` target; host compiler detection (`clang`/`gcc`); SDL2 via `pkg-config`; `PC_OBJS` list excluding GBA-only objects; `SED_PC_CONV` sed pipeline converting ARM assembly directives to x86 GAS syntax | Produces a native executable (`make pc`) alongside the normal GBA ROM build (`make`); ARM `.word`/`@`-comment syntax is invalid in x86 GAS |
-| [sound/MPlayDef.s](sound/MPlayDef.s) | Guard ARM-specific assembly directives | The `SED_PC_CONV` pass processes this file; ARM-only directives need to be absent or guarded |
-| [MPlayDef.s](MPlayDef.s) | Same | Same |
-| [libagbsyscall/libagbsyscall.c](libagbsyscall/libagbsyscall.c) | Wrap all functions in `#if !PLATFORM_PC` | `libagbsyscall` uses ARM `swi` instructions that are meaningless on x86; `pc_bios.c` provides the replacements |
+| [sound/MPlayDef.s](sound/MPlayDef.s) / [MPlayDef.s](MPlayDef.s) | `sound/MPlayDef.s` guards ARM-specific assembly directives; `MPlayDef.s` (new) is a one-line root stub that includes it | The GBA build system expects `MPlayDef.s` at the root; ARM-only directives need to be absent or guarded for the PC assembler pass |
 | [README.md](README.md) | PC build prerequisites and instructions | Guides contributors on installing SDL2 and running `make pc` |
 
 ---
