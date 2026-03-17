@@ -582,13 +582,22 @@ static void Task_SendPacket_SwitchToReceive(u8 taskId)
 
 static void *LoadPtrFromTaskData(const u16 *asShort)
 {
+#if PLATFORM_PC
+    return (void *)((uintptr_t)(u16)asShort[0] | (uintptr_t)(u16)asShort[1] << 16);
+#else
     return (void *)(asShort[0] | (asShort[1] << 16));
+#endif
 }
 
 static void StorePtrInTaskData(void *records, u16 *asShort)
 {
+#if PLATFORM_PC
+    asShort[0] = (uintptr_t)records;
+    asShort[1] = (uintptr_t)records >> 16;
+#else
     asShort[0] = (u32)records;
     asShort[1] = ((u32)records >> 16);
+#endif
 }
 
 static u8 GetMultiplayerId_(void)

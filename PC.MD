@@ -85,6 +85,20 @@ This branch adds a native desktop build of pokeemerald using SDL2. It runs the o
 | [src/pokeball.c](src/pokeball.c) | `Task_PlayCryWhenReleasedFromBall`: reconstruct `struct Pokemon *` from `tCryTaskMonPtr1`/`tCryTaskMonPtr2` via `uintptr_t` on PC | Same 32-bit pointer storage pattern as other task-data pointer round-trips; `uintptr_t` prevents truncation on 64-bit hosts |
 | [src/pokemon.c](src/pokemon.c) | `STORE_PTR_IN_TASK` macro: use `uintptr_t` instead of `u32` when splitting a pointer into two task-data halfwords on PC | Pointers stored via this macro (e.g. animation callbacks) are 64-bit on PC; `u32` cast truncates the upper half |
 | [src/util.c](src/util.c) | `LoadWordFromTwoHalfwords`: cast high halfword as `u16` instead of `s16` before shifting on PC | `(s16)h[1] << 16` sign-extends when bit 15 is set, corrupting bits 16–31 of the result; using `u16` keeps the shift unsigned and correct on both 32- and 64-bit hosts |
+| [src/task.c](src/task.c) | `SetTaskFuncWithFollowupFunc`/`SwitchTaskToFollowupFunc`: use `uintptr_t` on PC for followup-function pointer round-trip across two `s16` task-data slots | 64-bit function pointers are 8 bytes; `(u32)` cast truncates the upper half on 64-bit hosts |
+| [src/record_mixing.c](src/record_mixing.c) | `StorePtrInTaskData`/`LoadPtrFromTaskData`: use `uintptr_t` on PC when splitting and reconstructing a data pointer stored across two `u16` task-data slots | Same 32-bit pointer storage truncation pattern as other task-data pointer round-trips |
+| [src/pokemon_animation.c](src/pokemon_animation.c) | `LaunchAnimationTaskForFrontSprite`/`LaunchAnimationTaskForBackSprite`: store sprite pointer via `uintptr_t` on PC; update `ANIM_SPRITE` macro to reconstruct correctly | `(u32)(sprite)` cast truncates the upper half of a 64-bit pointer on PC |
+| [src/field_door.c](src/field_door.c) | `tFramesHi`/`tFramesLo` and `tGfxHi`/`tGfxLo` store and load sites: use `uintptr_t` on PC | Same 32-bit pointer truncation pattern; `frames` and `gfx` are data pointers stored across two 16-bit task slots |
+| [src/field_effect.c](src/field_effect.c) | Bypass `StoreWordInTwoHalfwords`/`LoadWordFromTwoHalfwords` for `IntrCallback` pointer on PC; store and reload directly via `uintptr_t` across `data[13]`/`data[14]` | Those utility functions accept/return `u32` and cannot carry a 64-bit function pointer |
+| [src/braille_puzzles.c](src/braille_puzzles.c) | `FldEff_UsePuzzleEffect`: store HM callback function pointer via `uintptr_t` on PC | 64-bit function pointer stored in `data[8]`/`data[9]` as `(u32)` truncates the upper half |
+| [src/fldeff_cut.c](src/fldeff_cut.c) | `FldEff_UseCutOnGrass`/`FldEff_UseCutOnTree`: store field-effect function pointer via `uintptr_t` on PC | Same reason |
+| [src/fldeff_dig.c](src/fldeff_dig.c) | `FldEff_UseDig`: store field-effect function pointer via `uintptr_t` on PC | Same reason |
+| [src/fldeff_misc.c](src/fldeff_misc.c) | `FldEff_UseSecretPower*`: store field-effect function pointer via `uintptr_t` on PC | Same reason |
+| [src/fldeff_rocksmash.c](src/fldeff_rocksmash.c) | `FldEff_UseRockSmash`: store function pointer via `uintptr_t` on PC; `Task_DoFieldMove_RunFunc`: reconstruct via `uintptr_t` on PC | Load site is the common runner for all field-move tasks; reconstruction must match the store |
+| [src/fldeff_strength.c](src/fldeff_strength.c) | `FldEff_UseStrength`: store field-effect function pointer via `uintptr_t` on PC | Same reason |
+| [src/fldeff_sweetscent.c](src/fldeff_sweetscent.c) | `FldEff_UseSweetScent`: store field-effect function pointer via `uintptr_t` on PC | Same reason |
+| [src/fldeff_teleport.c](src/fldeff_teleport.c) | `FldEff_UseTeleport`: store field-effect function pointer via `uintptr_t` on PC | Same reason |
+| [src/shop.c](src/shop.c) | `Task_HandleShopMenuBuy`/`Task_HandleShopMenuSell`: store `MainCallback` pointer via `uintptr_t`; `Task_GoToBuyOrSellMenu`: reconstruct via `uintptr_t` on PC | Same 32-bit pointer truncation pattern |
 
 ### Headers
 

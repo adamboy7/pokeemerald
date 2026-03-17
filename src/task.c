@@ -140,8 +140,13 @@ void SetTaskFuncWithFollowupFunc(u8 taskId, TaskFunc func, TaskFunc followupFunc
 {
     u8 followupFuncIndex = NUM_TASK_DATA - 2; // Should be const.
 
+#if PLATFORM_PC
+    gTasks[taskId].data[followupFuncIndex]     = (uintptr_t)followupFunc;
+    gTasks[taskId].data[followupFuncIndex + 1] = (uintptr_t)followupFunc >> 16; // Store followupFunc as two half-words in the data array.
+#else
     gTasks[taskId].data[followupFuncIndex] = (s16)((u32)followupFunc);
     gTasks[taskId].data[followupFuncIndex + 1] = (s16)((u32)followupFunc >> 16); // Store followupFunc as two half-words in the data array.
+#endif
     gTasks[taskId].func = func;
 }
 
@@ -149,7 +154,12 @@ void SwitchTaskToFollowupFunc(u8 taskId)
 {
     u8 followupFuncIndex = NUM_TASK_DATA - 2; // Should be const.
 
+#if PLATFORM_PC
+    gTasks[taskId].func = (TaskFunc)((uintptr_t)(u16)gTasks[taskId].data[followupFuncIndex] |
+                                     (uintptr_t)(u16)gTasks[taskId].data[followupFuncIndex + 1] << 16);
+#else
     gTasks[taskId].func = (TaskFunc)((u16)(gTasks[taskId].data[followupFuncIndex]) | (gTasks[taskId].data[followupFuncIndex + 1] << 16));
+#endif
 }
 
 bool8 FuncIsActiveTask(TaskFunc func)

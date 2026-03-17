@@ -39,8 +39,13 @@ bool8 FldEff_UseDig(void)
 {
     u8 taskId = CreateFieldMoveTask();
 
+#if PLATFORM_PC
+    gTasks[taskId].data[8] = (uintptr_t)StartDigFieldEffect >> 16;
+    gTasks[taskId].data[9] = (uintptr_t)StartDigFieldEffect;
+#else
     gTasks[taskId].data[8] = (u32)StartDigFieldEffect >> 16;
     gTasks[taskId].data[9] = (u32)StartDigFieldEffect;
+#endif
     if (!ShouldDoBrailleDigEffect())
         SetPlayerAvatarTransitionFlags(PLAYER_AVATAR_FLAG_ON_FOOT);
     return FALSE;

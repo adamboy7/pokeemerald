@@ -42,8 +42,13 @@ bool8 FldEff_SweetScent(void)
 
     SetWeatherScreenFadeOut();
     taskId = CreateFieldMoveTask();
+#if PLATFORM_PC
+    gTasks[taskId].data[8] = (uintptr_t)StartSweetScentFieldEffect >> 16;
+    gTasks[taskId].data[9] = (uintptr_t)StartSweetScentFieldEffect;
+#else
     gTasks[taskId].data[8] = (u32)StartSweetScentFieldEffect >> 16;
     gTasks[taskId].data[9] = (u32)StartSweetScentFieldEffect;
+#endif
     return FALSE;
 }
 

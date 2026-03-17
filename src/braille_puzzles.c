@@ -267,13 +267,23 @@ bool8 FldEff_UsePuzzleEffect(void)
 
     if (sIsRegisteelPuzzle == TRUE)
     {
+#if PLATFORM_PC
+        gTasks[taskId].data[8] = (uintptr_t)UseRegisteelHm_Callback >> 16;
+        gTasks[taskId].data[9] = (uintptr_t)UseRegisteelHm_Callback;
+#else
         gTasks[taskId].data[8] = (u32)UseRegisteelHm_Callback >> 16;
         gTasks[taskId].data[9] = (u32)UseRegisteelHm_Callback;
+#endif
     }
     else
     {
+#if PLATFORM_PC
+        gTasks[taskId].data[8] = (uintptr_t)UseRegirockHm_Callback >> 16;
+        gTasks[taskId].data[9] = (uintptr_t)UseRegirockHm_Callback;
+#else
         gTasks[taskId].data[8] = (u32)UseRegirockHm_Callback >> 16;
         gTasks[taskId].data[9] = (u32)UseRegirockHm_Callback;
+#endif
     }
     return FALSE;
 }

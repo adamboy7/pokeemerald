@@ -409,8 +409,13 @@ static bool32 AnimateDoorFrame(struct DoorGraphics *gfx, struct DoorAnimFrame *f
 static void Task_AnimateDoor(u8 taskId)
 {
     u16 *data = (u16*) gTasks[taskId].data;
+#if PLATFORM_PC
+    struct DoorAnimFrame *frames = (struct DoorAnimFrame *)((uintptr_t)(u16)tFramesHi << 16 | (u16)tFramesLo);
+    struct DoorGraphics *gfx = (struct DoorGraphics *)((uintptr_t)(u16)tGfxHi << 16 | (u16)tGfxLo);
+#else
     struct DoorAnimFrame *frames = (struct DoorAnimFrame *)(tFramesHi << 16 | tFramesLo);
     struct DoorGraphics *gfx = (struct DoorGraphics *)(tGfxHi << 16 | tGfxLo);
+#endif
 
     if (AnimateDoorFrame(gfx, frames, data) == FALSE)
         DestroyTask(taskId);
@@ -448,11 +453,19 @@ static s8 StartDoorAnimationTask(const struct DoorGraphics *gfx, const struct Do
         tX = x;
         tY = y;
 
+#if PLATFORM_PC
+        tFramesLo = (uintptr_t)frames;
+        tFramesHi = (uintptr_t)frames >> 16;
+
+        tGfxLo = (uintptr_t)gfx;
+        tGfxHi = (uintptr_t)gfx >> 16;
+#else
         tFramesLo = (u32)frames;
         tFramesHi = (u32)frames >> 16;
 
         tGfxLo = (u32)gfx;
         tGfxHi = (u32)gfx >> 16;
+#endif
 
         return taskId;
     }

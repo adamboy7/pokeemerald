@@ -2614,7 +2614,12 @@ static void FieldMoveShowMonOutdoorsEffect_Init(struct Task *task)
 {
     task->data[11] = REG_WININ;
     task->data[12] = REG_WINOUT;
+#if PLATFORM_PC
+    { uintptr_t _p = (uintptr_t)gMain.vblankCallback;
+      task->data[13] = (u16)_p; task->data[14] = (u16)(_p >> 16); }
+#else
     StoreWordInTwoHalfwords((u16*) &task->data[13], (u32)gMain.vblankCallback);
+#endif
     task->tWinHoriz = WIN_RANGE(DISPLAY_WIDTH, DISPLAY_WIDTH + 1);
     task->tWinVert = WIN_RANGE(DISPLAY_HEIGHT / 2, DISPLAY_HEIGHT / 2 + 1);
     task->tWinIn = WININ_WIN0_BG_ALL | WININ_WIN0_OBJ | WININ_WIN0_CLR;
@@ -2713,7 +2718,11 @@ static void FieldMoveShowMonOutdoorsEffect_RestoreBg(struct Task *task)
 static void FieldMoveShowMonOutdoorsEffect_End(struct Task *task)
 {
     IntrCallback callback;
+#if PLATFORM_PC
+    callback = (IntrCallback)((uintptr_t)(u16)task->data[13] | (uintptr_t)(u16)task->data[14] << 16);
+#else
     LoadWordFromTwoHalfwords((u16 *)&task->data[13], (u32 *)&callback);
+#endif
     SetVBlankCallback(callback);
     InitTextBoxGfxAndPrinters();
     FreeResourcesAndDestroySprite(&gSprites[task->tMonSpriteId], task->tMonSpriteId);
@@ -2725,7 +2734,11 @@ static void VBlankCB_FieldMoveShowMonOutdoors(void)
 {
     IntrCallback callback;
     struct Task *task = &gTasks[FindTaskIdByFunc(Task_FieldMoveShowMonOutdoors)];
+#if PLATFORM_PC
+    callback = (IntrCallback)((uintptr_t)(u16)task->data[13] | (uintptr_t)(u16)task->data[14] << 16);
+#else
     LoadWordFromTwoHalfwords((u16 *)&task->data[13], (u32 *)&callback);
+#endif
     callback();
     SetGpuReg(REG_OFFSET_WIN0H, task->tWinHoriz);
     SetGpuReg(REG_OFFSET_WIN0V, task->tWinVert);
@@ -2782,7 +2795,12 @@ static void FieldMoveShowMonIndoorsEffect_Init(struct Task *task)
 {
     SetGpuReg(REG_OFFSET_BG0HOFS, task->tBgHoriz);
     SetGpuReg(REG_OFFSET_BG0VOFS, task->tBgVert);
+#if PLATFORM_PC
+    { uintptr_t _p = (uintptr_t)gMain.vblankCallback;
+      task->data[13] = (u16)_p; task->data[14] = (u16)(_p >> 16); }
+#else
     StoreWordInTwoHalfwords((u16 *)&task->data[13], (u32)gMain.vblankCallback);
+#endif
     SetVBlankCallback(VBlankCB_FieldMoveShowMonIndoors);
     task->tState++;
 }
@@ -2842,7 +2860,11 @@ static void FieldMoveShowMonIndoorsEffect_End(struct Task *task)
     u16 bg0cnt;
     bg0cnt = (REG_BG0CNT >> 8) << 11;
     CpuFill32(0, (void *)VRAM + bg0cnt, 0x800);
+#if PLATFORM_PC
+    intrCallback = (IntrCallback)((uintptr_t)(u16)task->data[13] | (uintptr_t)(u16)task->data[14] << 16);
+#else
     LoadWordFromTwoHalfwords((u16 *)&task->data[13], (u32 *)&intrCallback);
+#endif
     SetVBlankCallback(intrCallback);
     InitTextBoxGfxAndPrinters();
     FreeResourcesAndDestroySprite(&gSprites[task->tMonSpriteId], task->tMonSpriteId);
@@ -2855,7 +2877,11 @@ static void VBlankCB_FieldMoveShowMonIndoors(void)
     IntrCallback intrCallback;
     struct Task *task;
     task = &gTasks[FindTaskIdByFunc(Task_FieldMoveShowMonIndoors)];
+#if PLATFORM_PC
+    intrCallback = (IntrCallback)((uintptr_t)(u16)task->data[13] | (uintptr_t)(u16)task->data[14] << 16);
+#else
     LoadWordFromTwoHalfwords((u16 *)&task->data[13], (u32 *)&intrCallback);
+#endif
     intrCallback();
     SetGpuReg(REG_OFFSET_BG0HOFS, task->tBgHoriz);
     SetGpuReg(REG_OFFSET_BG0VOFS, task->tBgVert);

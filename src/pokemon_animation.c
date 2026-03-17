@@ -903,6 +903,9 @@ u8 GetSpeciesBackAnimSet(u16 species)
 // By dumb luck, this is not an issue in vanilla. However,
 // changing the link order revealed this bug.
 #if MODERN || defined(BUGFIX)
+#if PLATFORM_PC
+#define ANIM_SPRITE(taskId)   ((struct Sprite *)((uintptr_t)(u16)gTasks[taskId].tPtrHi << 16 | (u16)gTasks[taskId].tPtrLo))
+#elif MODERN || defined(BUGFIX)
 #define ANIM_SPRITE(taskId)   ((struct Sprite *)((gTasks[taskId].tPtrHi << 16) | ((u16)gTasks[taskId].tPtrLo)))
 #else
 #define ANIM_SPRITE(taskId)   ((struct Sprite *)((gTasks[taskId].tPtrHi << 16) | (gTasks[taskId].tPtrLo)))
@@ -941,8 +944,13 @@ static void Task_HandleMonAnimation(u8 taskId)
 void LaunchAnimationTaskForFrontSprite(struct Sprite *sprite, u8 frontAnimId)
 {
     u8 taskId = CreateTask(Task_HandleMonAnimation, 128);
+#if PLATFORM_PC
+    gTasks[taskId].tPtrHi = (uintptr_t)(sprite) >> 16;
+    gTasks[taskId].tPtrLo = (uintptr_t)(sprite);
+#else
     gTasks[taskId].tPtrHi = (u32)(sprite) >> 16;
     gTasks[taskId].tPtrLo = (u32)(sprite);
+#endif
     gTasks[taskId].tAnimId = frontAnimId;
 }
 
@@ -958,8 +966,13 @@ void LaunchAnimationTaskForBackSprite(struct Sprite *sprite, u8 backAnimSet)
     u8 nature, taskId, animId, battler;
 
     taskId = CreateTask(Task_HandleMonAnimation, 128);
+#if PLATFORM_PC
+    gTasks[taskId].tPtrHi = (uintptr_t)(sprite) >> 16;
+    gTasks[taskId].tPtrLo = (uintptr_t)(sprite);
+#else
     gTasks[taskId].tPtrHi = (u32)(sprite) >> 16;
     gTasks[taskId].tPtrLo = (u32)(sprite);
+#endif
 
     battler = sprite->data[0];
     nature = GetNature(&gPlayerParty[gBattlerPartyIndexes[battler]]);
