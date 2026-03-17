@@ -86,5 +86,4 @@ u16 WaitForFlashWrite_Common(u8 phase, u8 *addr, u8 lastData)
 
     return result;
 }
-
 #endif // PLATFORM_GBA

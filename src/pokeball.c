@@ -669,7 +669,11 @@ static void Task_PlayCryWhenReleasedFromBall(u8 taskId)
     u16 species = gTasks[taskId].tCryTaskSpecies;
     u8 battler = gTasks[taskId].tCryTaskBattler;
     u8 monSpriteId = gTasks[taskId].tCryTaskMonSpriteId;
+#if PLATFORM_PC
+    struct Pokemon *mon = (void *)(uintptr_t)(((u16)(gTasks[taskId].tCryTaskMonPtr1) << 16) | (u16)(gTasks[taskId].tCryTaskMonPtr2));
+#else
     struct Pokemon *mon = (void *)(u32)((gTasks[taskId].tCryTaskMonPtr1 << 16) | (u16)(gTasks[taskId].tCryTaskMonPtr2));
+#endif
 
     switch (gTasks[taskId].tCryTaskState)
     {

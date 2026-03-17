@@ -6758,11 +6758,19 @@ const u8 *GetTrainerPartnerName(void)
     ((u16)(gTasks[taskId].data[dataId]) |                       \
     ((u16)(gTasks[taskId].data[dataId + 1]) << 16)))
 
+#if PLATFORM_PC
+#define STORE_PTR_IN_TASK(ptr, taskId, dataId)                 \
+{                                                              \
+    gTasks[taskId].data[dataId] = (uintptr_t)(ptr);            \
+    gTasks[taskId].data[dataId + 1] = (uintptr_t)(ptr) >> 16; \
+}
+#else
 #define STORE_PTR_IN_TASK(ptr, taskId, dataId)                 \
 {                                                              \
     gTasks[taskId].data[dataId] = (u32)(ptr);                  \
     gTasks[taskId].data[dataId + 1] = (u32)(ptr) >> 16;        \
 }
+#endif
 
 #define sAnimId    data[2]
 #define sAnimDelay data[3]

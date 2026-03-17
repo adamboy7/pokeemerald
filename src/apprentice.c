@@ -1291,7 +1291,11 @@ static void Task_ExecuteFuncAfterButtonPress(u8 taskId)
 {
     if (JOY_NEW(A_BUTTON) || JOY_NEW(B_BUTTON))
     {
+#if PLATFORM_PC
+        gApprenticeFunc = (void *)(uintptr_t)(((u16)gTasks[taskId].data[0] | ((u16)gTasks[taskId].data[1] << 16)));
+#else
         gApprenticeFunc = (void *)(u32)(((u16)gTasks[taskId].data[0] | (gTasks[taskId].data[1] << 16)));
+#endif
         gApprenticeFunc();
         DestroyTask(taskId);
     }
@@ -1300,8 +1304,13 @@ static void Task_ExecuteFuncAfterButtonPress(u8 taskId)
 static void ExecuteFuncAfterButtonPress(void (*func)(void))
 {
     u8 taskId = CreateTask(Task_ExecuteFuncAfterButtonPress, 1);
+#if PLATFORM_PC
+    gTasks[taskId].data[0] = (uintptr_t)(func);
+    gTasks[taskId].data[1] = (uintptr_t)(func) >> 16;
+#else
     gTasks[taskId].data[0] = (u32)(func);
     gTasks[taskId].data[1] = (u32)(func) >> 16;
+#endif
 }
 
 static void UNUSED ExecuteFollowupFuncAfterButtonPress(TaskFunc task)

@@ -1952,7 +1952,11 @@ void StorePointerInVars(s16 *lo, s16 *hi, const void *ptr)
 
 void *LoadPointerFromVars(s16 lo, s16 hi)
 {
+#if PLATFORM_PC
+    return (void *)(uintptr_t)((u16)lo | ((u16)hi << 16));
+#else
     return (void *)((u16)lo | ((u16)hi << 16));
+#endif
 }
 
 void PrepareEruptAnimTaskData(struct Task *task, u8 spriteId, s16 xScaleStart, s16 yScaleStart, s16 xScaleEnd, s16 yScaleEnd, u16 duration)

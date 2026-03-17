@@ -31,5 +31,4 @@ const struct FlashSetupInfo LE26FV10N1TS =
         { { 0x62, 0x13 } } // ID
     }
 };
-
 #endif // PLATFORM_GBA
