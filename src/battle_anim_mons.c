@@ -416,14 +416,23 @@ u8 GetAnimBattlerSpriteId(u8 animBattler)
 
 void StoreSpriteCallbackInData6(struct Sprite *sprite, void (*callback)(struct Sprite *))
 {
+#if PLATFORM_PC
+    { uintptr_t _p = (uintptr_t)callback;
+      sprite->data[6] = (u16)_p; sprite->data[7] = (u16)(_p >> 16); }
+#else
     sprite->data[6] = (u32)(callback) & 0xffff;
     sprite->data[7] = (u32)(callback) >> 16;
+#endif
 }
 
 void SetCallbackToStoredInData6(struct Sprite *sprite)
 {
+#if PLATFORM_PC
+    sprite->callback = (void (*)(struct Sprite *))((u16)sprite->data[6] | ((uintptr_t)(u16)sprite->data[7] << 16));
+#else
     u32 callback = (u16)sprite->data[6] | (sprite->data[7] << 16);
     sprite->callback = (void (*)(struct Sprite *))callback;
+#endif
 }
 
 // Sprite data for TranslateSpriteInCircle/Ellipse and related

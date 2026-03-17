@@ -8899,7 +8899,12 @@ static void CreateLevitateMovementTask(struct ObjectEvent *objectEvent)
     u8 taskId = CreateTask(ApplyLevitateMovement, 0xFF);
     struct Task *task = &gTasks[taskId];
 
+#if PLATFORM_PC
+    { uintptr_t _p = (uintptr_t)objectEvent;
+      task->data[0] = (u16)_p; task->data[1] = (u16)(_p >> 16); }
+#else
     StoreWordInTwoHalfwords(&task->data[0], (u32)objectEvent);
+#endif
     objectEvent->warpArrowSpriteId = taskId;
     task->data[3] = 0xFFFF;
 }
@@ -8910,7 +8915,11 @@ static void ApplyLevitateMovement(u8 taskId)
     struct Sprite *sprite;
     struct Task *task = &gTasks[taskId];
 
+#if PLATFORM_PC
+    objectEvent = (struct ObjectEvent *)((u16)task->data[0] | ((uintptr_t)(u16)task->data[1] << 16));
+#else
     LoadWordFromTwoHalfwords(&task->data[0], (u32 *)&objectEvent); // load the map object pointer.
+#endif
     sprite = &gSprites[objectEvent->spriteId];
 
     if(!(task->data[2] & 3))
@@ -8927,7 +8936,11 @@ static void DestroyLevitateMovementTask(u8 taskId)
     struct ObjectEvent *objectEvent;
     struct Task *task = &gTasks[taskId];
 
+#if PLATFORM_PC
+    objectEvent = (struct ObjectEvent *)((u16)task->data[0] | ((uintptr_t)(u16)task->data[1] << 16)); // unused objectEvent
+#else
     LoadWordFromTwoHalfwords(&task->data[0], (u32 *)&objectEvent); // unused objectEvent
+#endif
     DestroyTask(taskId);
 }
 

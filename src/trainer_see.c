@@ -627,7 +627,11 @@ static void Task_SetBuriedTrainerMovement(u8 taskId)
     struct Task *task = &gTasks[taskId];
     struct ObjectEvent *objEvent;
 
+#if PLATFORM_PC
+    objEvent = (struct ObjectEvent *)((u16)task->tObjEvent | ((uintptr_t)(u16)task->data[2] << 16));
+#else
     LoadWordFromTwoHalfwords((u16*) &task->tObjEvent, (u32 *)&objEvent);
+#endif
     if (!task->data[7])
     {
         ObjectEventClearHeldMovement(objEvent);
@@ -649,7 +653,13 @@ static void Task_SetBuriedTrainerMovement(u8 taskId)
 // Called when a buried Trainer has the reveal_trainer movement applied, from direct interaction
 void SetBuriedTrainerMovement(struct ObjectEvent *objEvent)
 {
+#if PLATFORM_PC
+    { u8 _taskId = CreateTask(Task_SetBuriedTrainerMovement, 0);
+      uintptr_t _p = (uintptr_t)objEvent;
+      gTasks[_taskId].tObjEvent = (u16)_p; gTasks[_taskId].data[2] = (u16)(_p >> 16); }
+#else
     StoreWordInTwoHalfwords((u16*) &gTasks[CreateTask(Task_SetBuriedTrainerMovement, 0)].tObjEvent, (u32)objEvent);
+#endif
 }
 
 void DoTrainerApproach(void)

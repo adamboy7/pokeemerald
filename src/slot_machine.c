@@ -1121,7 +1121,12 @@ static void PlaySlotMachine_Internal(u8 machineId, MainCallback exitCallback)
 {
     struct Task *task = &gTasks[CreateTask(SlotMachineDummyTask, 0xFF)];
     task->tMachineId = machineId;
+#if PLATFORM_PC
+    { uintptr_t _p = (uintptr_t)exitCallback;
+      task->tExitCallback = (u16)_p; task->data[2] = (u16)(_p >> 16); }
+#else
     StoreWordInTwoHalfwords(&task->tExitCallback, (intptr_t)exitCallback);
+#endif
 }
 
 // Extracts and assigns machineId and exit callback from task.
@@ -1129,7 +1134,11 @@ static void SlotMachine_InitFromTask(void)
 {
     struct Task *task = &gTasks[FindTaskIdByFunc(SlotMachineDummyTask)];
     sSlotMachine->machineId = task->tMachineId;
+#if PLATFORM_PC
+    sSlotMachine->prevMainCb = (MainCallback)((u16)task->tExitCallback | ((uintptr_t)(u16)task->data[2] << 16));
+#else
     LoadWordFromTwoHalfwords((u16 *)&task->tExitCallback, (u32 *)&sSlotMachine->prevMainCb);
+#endif
 }
 
 static void SlotMachineDummyTask(u8 taskId)
