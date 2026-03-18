@@ -6,7 +6,11 @@
 #define TASK_NONE TAIL_SENTINEL
 
 #define NUM_TASKS 16
+#if PLATFORM_PC
+#define NUM_TASK_DATA 24  // struct ListMenu is 44 bytes on 64-bit; need data[] >= 44 bytes
+#else
 #define NUM_TASK_DATA 16
+#endif
 
 typedef void (*TaskFunc)(u8 taskId);
 

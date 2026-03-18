@@ -893,7 +893,11 @@ s32 ListMenuGetTemplateField(u8 taskId, u8 field)
     {
     case LISTFIELD_MOVECURSORFUNC:
     case LISTFIELD_MOVECURSORFUNC2:
+#if PLATFORM_PC
+        return (s32)(uintptr_t)(data->template.moveCursorFunc);
+#else
         return (s32)(data->template.moveCursorFunc);
+#endif
     case LISTFIELD_TOTALITEMS:
         return data->template.totalItems;
     case LISTFIELD_MAXSHOWED:
@@ -937,7 +941,11 @@ void ListMenuSetTemplateField(u8 taskId, u8 field, s32 value)
     {
     case LISTFIELD_MOVECURSORFUNC:
     case LISTFIELD_MOVECURSORFUNC2:
+#if PLATFORM_PC
+        data->template.moveCursorFunc = (void *)(uintptr_t)value;
+#else
         data->template.moveCursorFunc = (void *)value;
+#endif
         break;
     case LISTFIELD_TOTALITEMS:
         data->template.totalItems = value;
