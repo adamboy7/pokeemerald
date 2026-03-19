@@ -118,7 +118,7 @@ void AgbMain(void)
     EnableVCountIntrAtLine150();
     // RFU (wireless adapter) uses GBA serial hardware and its own interrupt-
     // driven protocol. None of that hardware exists on PC, so skip it entirely.
-#if !PLATFORM_PC
+#if PLATFORM_GBA
     InitRFU();
 #endif
     RtcInit();

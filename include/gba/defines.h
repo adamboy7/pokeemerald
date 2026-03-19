@@ -53,7 +53,7 @@ extern void *gIntrVector;
 // On GBA, palette/VRAM/OAM are at fixed memory-mapped addresses.
 // On PC they are heap-allocated pointers (declared in main.c, extern'd
 // below) so that all address arithmetic still works through the same macros.
-#if !PLATFORM_PC
+#if PLATFORM_GBA
 #define PLTT          0x5000000
 #define BG_PLTT       PLTT
 #define BG_PLTT_SIZE  0x200

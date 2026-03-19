@@ -1,15 +1,33 @@
 	.macro song label:req, music_player:req, unknown:req
+#if PLATFORM_PC
+	@ 64-bit host: pointer is 8 bytes; pad to sizeof(Song)=16
+	.quad \label
+	.2byte \music_player
+	.2byte \unknown
+	.space 4
+#else
 	.4byte \label
 	.2byte \music_player
 	.2byte \unknown
+#endif
 	.endm
 
 	.macro music_player info_struct:req, track_struct:req, num_tracks:req, unknown:req
+#if PLATFORM_PC
+	@ 64-bit host: pointers are 8 bytes; pad to sizeof(MusicPlayer)=24
+	.quad \info_struct
+	.quad \track_struct
+	.byte \num_tracks
+	.space 1  @ Padding
+	.2byte \unknown
+	.space 4
+#else
 	.4byte \info_struct
 	.4byte \track_struct
 	.byte \num_tracks
 	.space 1  @ Padding
 	.2byte \unknown
+#endif
 	.endm
 
 	.macro voice_group label:req, starting_note

@@ -28,6 +28,18 @@ struct MusicPlayerInfo gMPlayInfo_BGM;
 struct MusicPlayerInfo gMPlayInfo_SE1;
 struct MusicPlayerInfo gMPlayInfo_SE2;
 struct MusicPlayerInfo gMPlayInfo_SE3;
+// Track storage — sized by the real 64-bit sizeof(MusicPlayerTrack), not the GBA TRACK_SIZE=0x50.
+struct MusicPlayerTrack gMPlayTrack_BGM[10];
+struct MusicPlayerTrack gMPlayTrack_SE1[3];
+struct MusicPlayerTrack gMPlayTrack_SE2[9];
+struct MusicPlayerTrack gMPlayTrack_SE3[1];
+// Music player table with full 64-bit pointers (assembly version uses .4byte, wrong on 64-bit).
+const struct MusicPlayer gMPlayTable[] = {
+    { &gMPlayInfo_BGM, gMPlayTrack_BGM, 10, 0 },
+    { &gMPlayInfo_SE1, gMPlayTrack_SE1,  3, 1 },
+    { &gMPlayInfo_SE2, gMPlayTrack_SE2,  9, 1 },
+    { &gMPlayInfo_SE3, gMPlayTrack_SE3,  1, 0 },
+};
 struct MusicPlayerTrack gPokemonCryTracks[MAX_POKEMON_CRIES * 2];
 struct PokemonCrySong gPokemonCrySong;
 u8 gMPlayMemAccArea[0x10];
