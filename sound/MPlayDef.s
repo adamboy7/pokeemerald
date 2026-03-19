@@ -3,7 +3,7 @@
 @ Instead, runtime-computed offsets for each voicegroup are provided
 @ by pc_voicegroup_offsets.inc so the PC audio engine can locate them.
 #if PLATFORM_PC
-	.include "voicegroups/pc_voicegroup_offsets.inc"
+	.include "sound/voicegroups/pc_voicegroup_offsets.inc"
 #endif
 	.equ	W01,	W00+1		@
 	.equ	W02,	W00+2		@

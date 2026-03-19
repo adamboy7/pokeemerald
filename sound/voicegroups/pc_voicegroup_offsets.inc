@@ -13,3 +13,5 @@
 .equ voicegroup_strings_keysplit , 0
 .equ voicegroup_trumpet_keysplit , 0
 .equ voicegroup_tuba_keysplit , 0
+.equ voicegroup_rs_sfx_1 , 0
+.equ voicegroup_rs_sfx_2 , 0
