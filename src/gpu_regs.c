@@ -93,6 +93,15 @@ void SetGpuReg(u8 regOffset, u16 value)
 
         GPU_REG_BUF(regOffset) = value;
 #if PLATFORM_PC
+        // DISPSTAT must be applied immediately on PC: the interrupt-enable
+        // bits (VBLANK_INTR, HBLANK_INTR, VCOUNT_INTR) must be live before
+        // the first interrupt fires, but the waiting list is only drained
+        // inside those same interrupt handlers (chicken-and-egg deadlock).
+        if (regOffset == REG_OFFSET_DISPSTAT)
+        {
+            CopyBufferedValueToGpuReg(regOffset);
+            return;
+        }
         vcount = PlatformReadReg(REG_OFFSET_VCOUNT) & 0xFF;
 #else
         vcount = REG_VCOUNT & 0xFF;
@@ -134,6 +143,11 @@ void SetGpuReg_ForcedBlank(u8 regOffset, u16 value)
         GPU_REG_BUF(regOffset) = value;
 
 #if PLATFORM_PC
+        if (regOffset == REG_OFFSET_DISPSTAT)
+        {
+            CopyBufferedValueToGpuReg(regOffset);
+            return;
+        }
         if (PlatformReadReg(REG_OFFSET_DISPCNT) & DISPCNT_FORCED_BLANK)
 #else
         if (REG_DISPCNT & DISPCNT_FORCED_BLANK)
