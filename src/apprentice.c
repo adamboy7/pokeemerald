@@ -1292,7 +1292,7 @@ static void Task_ExecuteFuncAfterButtonPress(u8 taskId)
     if (JOY_NEW(A_BUTTON) || JOY_NEW(B_BUTTON))
     {
 #if PLATFORM_PC
-        gApprenticeFunc = (void *)(uintptr_t)(((u16)gTasks[taskId].data[0] | ((u16)gTasks[taskId].data[1] << 16)));
+        gApprenticeFunc = (void *)(uintptr_t)(((u16)gTasks[taskId].data[0] | ((uintptr_t)(u16)gTasks[taskId].data[1] << 16)));
 #else
         gApprenticeFunc = (void *)(u32)(((u16)gTasks[taskId].data[0] | (gTasks[taskId].data[1] << 16)));
 #endif

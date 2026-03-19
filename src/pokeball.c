@@ -670,7 +670,7 @@ static void Task_PlayCryWhenReleasedFromBall(u8 taskId)
     u8 battler = gTasks[taskId].tCryTaskBattler;
     u8 monSpriteId = gTasks[taskId].tCryTaskMonSpriteId;
 #if PLATFORM_PC
-    struct Pokemon *mon = (void *)(uintptr_t)(((u16)(gTasks[taskId].tCryTaskMonPtr1) << 16) | (u16)(gTasks[taskId].tCryTaskMonPtr2));
+    struct Pokemon *mon = (void *)(uintptr_t)(((uintptr_t)(u16)(gTasks[taskId].tCryTaskMonPtr1) << 16) | (u16)(gTasks[taskId].tCryTaskMonPtr2));
 #else
     struct Pokemon *mon = (void *)(u32)((gTasks[taskId].tCryTaskMonPtr1 << 16) | (u16)(gTasks[taskId].tCryTaskMonPtr2));
 #endif
@@ -811,8 +811,13 @@ static void SpriteCB_ReleaseMonFromBall(struct Sprite *sprite)
         gTasks[taskId].tCryTaskWantedCry = wantedCryCase;
         gTasks[taskId].tCryTaskBattler = battler;
         gTasks[taskId].tCryTaskMonSpriteId = gBattlerSpriteIds[sprite->sBattler];
+#if PLATFORM_PC
+        gTasks[taskId].tCryTaskMonPtr1 = (uintptr_t)(mon) >> 16;
+        gTasks[taskId].tCryTaskMonPtr2 = (uintptr_t)(mon);
+#else
         gTasks[taskId].tCryTaskMonPtr1 = (u32)(mon) >> 16;
         gTasks[taskId].tCryTaskMonPtr2 = (u32)(mon);
+#endif
         gTasks[taskId].tCryTaskState = 0;
     }
 

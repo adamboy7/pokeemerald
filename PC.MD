@@ -1,128 +1,399 @@
-# PC Port
+# PC Port — Change Log
 
-This branch adds a native desktop build of pokeemerald using SDL2. It runs the original game logic unchanged, with GBA hardware replaced by software emulation.
-
-**Build:** `make pc` → produces `build/pc/pokeemerald` (or `.exe` on Windows)
-**Requires:** SDL2, pkg-config (or set `SDL_CFLAGS`/`SDL_LIBS` manually), clang or gcc
-
----
-
-## New Files
-
-### Platform Abstraction
-
-| File | What it does | Why it exists |
-|------|-------------|---------------|
-| [include/platform.h](include/platform.h) | Defines `PLATFORM_PC`/`PLATFORM_GBA` compile-time flags and `PC_DMA_RECORD` macro | Central switch for all conditional compilation; `PC_DMA_RECORD` saves full 64-bit DMA pointers before they're stored in 32-bit task data slots |
-| [include/platform/io.h](include/platform/io.h) | `PlatformReadReg`/`PlatformWriteReg` — routes register access to hardware on GBA or the emulated array on PC | Single abstraction point so the rest of the codebase needs no per-site `#ifdef` for register reads/writes |
-| [src/platform/io_pc.c](src/platform/io_pc.c) | Full SDL2 platform layer: software renderer (all GBA BG/sprite/window/blend modes), keyboard+gamepad input, DMA processing, timer emulation, interrupt dispatch | Replaces the entire GBA PPU, joypad, DMA controller, and timer hardware |
-
-### Desktop Entry Point
-
-| File | What it does | Why it exists |
-|------|-------------|---------------|
-| [src/pc_main.c](src/pc_main.c) | `main()` — heap-allocates VRAM, palette, and OAM buffers then calls `AgbMain()` | GBA provides these at fixed hardware addresses; on PC they must be allocated before the engine starts |
-
-### PC Hardware Implementations
-
-| File | What it does | Why it exists |
-|------|-------------|---------------|
-| [src/pc_audio.c](src/pc_audio.c) | SDL2 audio callback, DirectSound channel mixer, PCM and tone playback | Replaces the GBA's ARM-driven audio DMA and mixing hardware so the m4a engine can produce sound on a PC |
-| [src/pc_bios.c](src/pc_bios.c) | Pure-C reimplementations of GBA BIOS syscalls: math (Sqrt, ArcTan), memory ops (CpuSet, CpuFastSet), decompression (LZ77, RLE, Huffman, BitUnPack, Diff filter), affine matrix setup | The GBA BIOS is mask ROM; PC has no BIOS, so every syscall the game uses must be reimplemented |
-| [src/pc_flash.c](src/pc_flash.c) | File-backed save flash emulation: read/write/erase backed by an in-memory buffer that syncs to disk | Replaces the physical Panasonic/Sanyo/SST flash chip; saves persist to a `.sav` file |
-| [src/pc_io_reg.c](src/pc_io_reg.c) | Defines `gIoRegisters[0x400]` shadow array for non-SDL builds | Backing store for `PlatformReadReg`/`PlatformWriteReg` when the SDL renderer is not active |
-| [src/pc_rtc.c](src/pc_rtc.c) | Real-time clock using standard C `time.h`, with BCD encoding/decoding | GBA uses a Seiko S-3511A RTC over SPI; PC reads the host system clock via `localtime()` instead |
-| [src/pc_m4a_stub.c](src/pc_m4a_stub.c) | Full C reimplementation of the m4a/MP2000 music engine: sequencer, note/envelope/LFO handlers, PCM mixer, Pokemon cry system | The original `m4a.c`/`m4a_1.s` is ARM Thumb assembly that cannot be assembled for x86; this C version provides equivalent behavior |
-| [src/pc_multiboot.c](src/pc_multiboot.c) | No-op multiboot stubs that always return success | Multiboot sends a ROM to a GBA over a link cable — there is no equivalent on PC |
-| [src/pc_link_rfu_stub.c](src/pc_link_rfu_stub.c) | Stubs for all ~100 RFU wireless adapter functions | The RF Unit is a physical GBA accessory; its entire serial/interrupt-driven protocol doesn't exist on PC |
-| [src/pc_stub.c](src/pc_stub.c) | Provides `IntrMain_Buffer` and ROM header fields | On GBA these come from the linker script and ROM header binary; the PC linker has no such section |
-| [src/libgcnmultiboot.c](src/libgcnmultiboot.c) | No-op GameCube multiboot stubs (TODO) | GameCube↔GBA linking is hardware-only |
-| [libagbsyscall/libagbsyscall.c](libagbsyscall/libagbsyscall.c) | PC-only desktop wrappers for GBA BIOS sound driver calls (`SoundDriverInit`, `SoundDriverMain`, `SoundDriverVSync`, etc.), delegating to the `pc_m4a_stub` engine; `SoundBias*` are no-ops; `MusicPlayer*` stubs are weak symbols | On GBA these functions are BIOS `swi` calls in ARM assembly; the PC build has no BIOS, so this file provides equivalent C entry points |
-
-### Tests
-
-| File | What it does |
-|------|-------------|
-| [tests/pc_bios_tests.c](tests/pc_bios_tests.c) | Unit tests verifying BIOS reimplementations match GBA BIOS output |
-| [tests/pc_flash_tests.c](tests/pc_flash_tests.c) | Unit tests for flash read/write/erase round-trips |
-| [tests/pc_audio_tests.c](tests/pc_audio_tests.c) | Scaffolding for future audio accuracy tests |
-| [tests/pc_rtc_tests.c](tests/pc_rtc_tests.c) | Scaffolding for future RTC tests |
-
-### Assets
-
-| File | What it does | Why it exists |
-|------|-------------|---------------|
-| [sound/voicegroups/pc_voicegroup_offsets.inc](sound/voicegroups/pc_voicegroup_offsets.inc) | Precomputed voice group offset table for the PC audio engine | The GBA build derives these offsets from link-time memory layout; the PC build needs them as explicit constants |
+This document describes every source change made in the `PC` branch relative to upstream `master`.
+All modifications follow one rule: **the GBA code path is preserved verbatim** inside `#else` / `#endif`
+blocks; only `#if PLATFORM_PC` branches are added.
 
 ---
 
-## Modified Files
+## 1. GBA-only translation units excluded on PC
 
-### GBA Sources
+**Files:** `src/agb_flash.c`, `src/agb_flash_1m.c`, `src/agb_flash_le.c`, `src/agb_flash_mx.c`,
+`src/m4a.c`, `src/m4a_tables.c`
 
-| File | What changed | Why |
-|------|-------------|-----|
-| [src/main.c](src/main.c) | Wrap `REG_WAITCNT` write, `InitRFU()`, and soft-reset RFU shutdown in `PLATFORM_PC`/`PLATFORM_GBA` guards; add `gPCVram`/`gPCPltt`/`gPCOam` extern definitions | Prevents writes to non-existent hardware registers and calls to missing RFU code on PC |
-| [src/gpu_regs.c](src/gpu_regs.c) | Replace direct `REG_*` writes with `PlatformWriteReg`; mask `DISPSTAT` interrupt bits on PC | Routes GPU register writes through the SDL renderer; `DISPSTAT` interrupt state is managed by the platform layer on PC, not by the GPU register manager |
-| [src/dma3_manager.c](src/dma3_manager.c) | Use `PlatformWriteReg` for DMA control register writes | DMA3 VRAM copies must be intercepted by `io_pc.c` to update the software renderer |
-| [src/palette.c](src/palette.c) | Use `PlatformWriteReg` for `BLDCNT`/`BLDALPHA`/`BLDY` writes | Blend registers must be visible to the PC renderer's color-effects pass |
-| [src/m4a.c](src/m4a.c) | Removed dead `#if PLATFORM_PC` guard inside `#if PLATFORM_GBA` | The entire file is wrapped in `#if PLATFORM_GBA` (lines 4–1792); the inner `#if PLATFORM_PC / #else / #endif` in `SampleFreqSet()` was unreachable dead code — only the GBA VCOUNT path ever compiled. PC audio is handled entirely by `pc_m4a_stub.c` and `libagbsyscall.c` |
-| [src/m4a_tables.c](src/m4a_tables.c) | `gMPlayJumpTableTemplate` function-pointer array guarded with `#if PLATFORM_GBA` | `pc_m4a_stub.c` defines its own equivalent table; compiling the GBA version on PC would produce duplicate symbols |
-| [src/agb_flash.c](src/agb_flash.c) | Guard flash chip detection/timing loops with `#if !PLATFORM_PC` | Chip identification uses hardware wait-states that don't exist on PC; `pc_flash.c` handles flash I/O instead |
-| [src/agb_flash_1m.c](src/agb_flash_1m.c) | Same as above | Same reason |
-| [src/agb_flash_le.c](src/agb_flash_le.c) | Same as above | Same reason |
-| [src/agb_flash_mx.c](src/agb_flash_mx.c) | Same as above | Same reason |
-| [src/battle_dome.c](src/battle_dome.c) | Wrap RFU calls in `PLATFORM_GBA` guard | Battle Dome wireless battles use the RF Unit, which is GBA-only |
-| [src/link.c](src/link.c) | Skip RFU initialization and wireless link management on PC | Link cable and wireless hardware are absent on PC |
-| [src/menu.c](src/menu.c) | Use `uintptr_t` in task data for heap pointers; fix `BgDmaFill` VRAM pointer arithmetic | 64-bit hosts have 8-byte pointers; storing them in 32-bit `tData[]` slots truncates the upper half — `uintptr_t` preserves the full address |
-| [src/script.c](src/script.c) | Platform register guard around timer register access | Script engine reads timer registers for RNG seeding; on PC these go through `PlatformReadReg` |
-| [src/tileset_anims.c](src/tileset_anims.c) | Platform register guards for DMA and GPU register writes | Tileset animation DMA transfers must be routed through the platform layer |
-| [src/ereader_helpers.c](src/ereader_helpers.c) | Guard eReader serial hardware access | The eReader is a GBA-only peripheral |
-| [src/libisagbprn.c](src/libisagbprn.c) | Redirect debug output to host stdout | `isagbprn` debug printing uses GBA serial hardware; on PC it writes to `stdout` |
-| [src/apprentice.c](src/apprentice.c) | `ExecuteFuncAfterButtonPress`/`Task_ExecuteFuncAfterButtonPress`: store and reload function pointer in task `data[0]`/`data[1]` via `uintptr_t` on PC | 64-bit function pointers are 8 bytes; casting to `u32` before splitting discards the upper 32 bits and corrupts the pointer on PC |
-| [src/battle_anim_mons.c](src/battle_anim_mons.c) | `LoadPointerFromVars`: add `uintptr_t` intermediate cast when reconstructing a pointer from two `s16` halves; `StoreSpriteCallbackInData6`/`SetCallbackToStoredInData6`: bypass `(u32)` cast via `uintptr_t` on PC | Without `uintptr_t`, the 32-bit integer result is zero-extended to 64 bits incorrectly; `StoreSpriteCallbackInData6` stored/loaded callback via `(u32)` cast which truncates 64-bit function pointers |
-| [src/battle_factory_screen.c](src/battle_factory_screen.c) | All Swap-screen function-pointer store (`tFollowUpTaskPtrHi`/`tFollowUpTaskPtrLo`) and load sites use `uintptr_t` on PC | The Swap screen queues follow-up task functions by splitting a pointer across two `u16` task-data slots; on a 64-bit host the pointer may exceed 32 bits, so `uintptr_t` is required to preserve all bits |
-| [src/pokeball.c](src/pokeball.c) | `Task_PlayCryWhenReleasedFromBall`: reconstruct `struct Pokemon *` from `tCryTaskMonPtr1`/`tCryTaskMonPtr2` via `uintptr_t` on PC | Same 32-bit pointer storage pattern as other task-data pointer round-trips; `uintptr_t` prevents truncation on 64-bit hosts |
-| [src/pokemon.c](src/pokemon.c) | `STORE_PTR_IN_TASK` macro: use `uintptr_t` instead of `u32` when splitting a pointer into two task-data halfwords on PC | Pointers stored via this macro (e.g. animation callbacks) are 64-bit on PC; `u32` cast truncates the upper half |
-| [src/util.c](src/util.c) | `LoadWordFromTwoHalfwords`: cast high halfword as `u16` instead of `s16` before shifting on PC | `(s16)h[1] << 16` sign-extends when bit 15 is set, corrupting bits 16–31 of the result; using `u16` keeps the shift unsigned and correct on both 32- and 64-bit hosts |
-| [src/task.c](src/task.c) | `SetTaskFuncWithFollowupFunc`/`SwitchTaskToFollowupFunc`: use `uintptr_t` on PC for followup-function pointer round-trip across two `s16` task-data slots | 64-bit function pointers are 8 bytes; `(u32)` cast truncates the upper half on 64-bit hosts |
-| [src/record_mixing.c](src/record_mixing.c) | `StorePtrInTaskData`/`LoadPtrFromTaskData`: use `uintptr_t` on PC when splitting and reconstructing a data pointer stored across two `u16` task-data slots | Same 32-bit pointer storage truncation pattern as other task-data pointer round-trips |
-| [src/pokemon_animation.c](src/pokemon_animation.c) | `LaunchAnimationTaskForFrontSprite`/`LaunchAnimationTaskForBackSprite`: store sprite pointer via `uintptr_t` on PC; update `ANIM_SPRITE` macro to reconstruct correctly | `(u32)(sprite)` cast truncates the upper half of a 64-bit pointer on PC |
-| [src/field_door.c](src/field_door.c) | `tFramesHi`/`tFramesLo` and `tGfxHi`/`tGfxLo` store and load sites: use `uintptr_t` on PC | Same 32-bit pointer truncation pattern; `frames` and `gfx` are data pointers stored across two 16-bit task slots |
-| [src/field_effect.c](src/field_effect.c) | Bypass `StoreWordInTwoHalfwords`/`LoadWordFromTwoHalfwords` for `IntrCallback` pointer on PC; store and reload directly via `uintptr_t` across `data[13]`/`data[14]` | Those utility functions accept/return `u32` and cannot carry a 64-bit function pointer |
-| [src/braille_puzzles.c](src/braille_puzzles.c) | `FldEff_UsePuzzleEffect`: store HM callback function pointer via `uintptr_t` on PC | 64-bit function pointer stored in `data[8]`/`data[9]` as `(u32)` truncates the upper half |
-| [src/fldeff_cut.c](src/fldeff_cut.c) | `FldEff_UseCutOnGrass`/`FldEff_UseCutOnTree`: store field-effect function pointer via `uintptr_t` on PC | Same reason |
-| [src/fldeff_dig.c](src/fldeff_dig.c) | `FldEff_UseDig`: store field-effect function pointer via `uintptr_t` on PC | Same reason |
-| [src/fldeff_misc.c](src/fldeff_misc.c) | `FldEff_UseSecretPower*`: store field-effect function pointer via `uintptr_t` on PC | Same reason |
-| [src/fldeff_rocksmash.c](src/fldeff_rocksmash.c) | `FldEff_UseRockSmash`: store function pointer via `uintptr_t` on PC; `Task_DoFieldMove_RunFunc`: reconstruct via `uintptr_t` on PC | Load site is the common runner for all field-move tasks; reconstruction must match the store |
-| [src/fldeff_strength.c](src/fldeff_strength.c) | `FldEff_UseStrength`: store field-effect function pointer via `uintptr_t` on PC | Same reason |
-| [src/fldeff_sweetscent.c](src/fldeff_sweetscent.c) | `FldEff_UseSweetScent`: store field-effect function pointer via `uintptr_t` on PC | Same reason |
-| [src/fldeff_teleport.c](src/fldeff_teleport.c) | `FldEff_UseTeleport`: store field-effect function pointer via `uintptr_t` on PC | Same reason |
-| [src/shop.c](src/shop.c) | `Task_HandleShopMenuBuy`/`Task_HandleShopMenuSell`: store `MainCallback` pointer via `uintptr_t`; `Task_GoToBuyOrSellMenu`: reconstruct via `uintptr_t` on PC | Same 32-bit pointer truncation pattern |
-| [src/event_object_movement.c](src/event_object_movement.c) | `CreateLevitateMovementTask`/`ApplyLevitateMovement`/`DestroyLevitateMovementTask`: store and reload `struct ObjectEvent *` via `uintptr_t` on PC | `StoreWordInTwoHalfwords`/`LoadWordFromTwoHalfwords` accept/return `u32` and truncate 64-bit pointers; bypass with direct `uintptr_t` split across `data[0]`/`data[1]` |
-| [src/trainer_see.c](src/trainer_see.c) | `SetBuriedTrainerMovement`/`Task_SetBuriedTrainerMovement`: store and reload `struct ObjectEvent *` via `uintptr_t` on PC | Same `StoreWordInTwoHalfwords`/`LoadWordFromTwoHalfwords` 32-bit truncation issue; pointer split across `tObjEvent`(`data[1]`)/`data[2]` |
-| [src/slot_machine.c](src/slot_machine.c) | `PlaySlotMachine_Internal`: store `MainCallback` via `uintptr_t`; `SlotMachine_InitFromTask`: reconstruct `MainCallback` via `uintptr_t` | Store used `(intptr_t)` cast (already partially correct) but `LoadWordFromTwoHalfwords` wrote through `(u32 *)` to a 64-bit function pointer, leaving upper 4 bytes undefined |
+Each file gains `#include "platform.h"` at the top and its entire body is wrapped in
+`#if PLATFORM_GBA … #endif`.
 
-### Headers
-
-| File | What changed | Why |
-|------|-------------|-----|
-| [include/global.h](include/global.h) | Include `platform.h`; `T1_READ_PTR`/`T2_READ_PTR` use `uintptr_t` on PC; `__attribute__((packed))` on `SaveBlock1`/`SaveBlock2` on PC | Pointer task-data round-trips are safe on 64-bit; packed attribute prevents host-compiler padding from corrupting save data layout |
-| [include/gba/defines.h](include/gba/defines.h) | `VRAM`/`PLTT`/`OAM` macros resolve to `gPCVram`/`gPCPltt`/`gPCOam` pointers on PC | Unmodified source code transparently accesses heap buffers instead of GBA memory-mapped hardware |
-| [include/gba/io_reg.h](include/gba/io_reg.h) | All `REG_*` definitions route through `PlatformReadReg`/`PlatformWriteReg` on PC | One change point; every existing register access in the codebase gains PC support without per-site edits |
-| [include/gba/macro.h](include/gba/macro.h) | DMA macros call `PC_DMA_RECORD`; pointer macros use `uintptr_t` | Captures full 64-bit source/destination before the 32-bit register write path discards the upper half |
-| [include/gba/syscall.h](include/gba/syscall.h) | Declare `pc_bios.c` functions under `PLATFORM_PC` | The rest of the codebase calls BIOS functions through the same headers on both targets |
-| [include/gba/m4a_internal.h](include/gba/m4a_internal.h) | PC audio system struct and function declarations | Shared interface between `m4a.c` and `pc_m4a_stub.c` |
-| [include/m4a.h](include/m4a.h) | Declare `m4aSoundShutdown` and other PC audio API | `pc_main.c` registers `m4aSoundShutdown` via `atexit` for clean teardown |
-| [include/agb_flash.h](include/agb_flash.h) | Declare PC flash API | `agb_flash.c` delegates to `pc_flash.c` on PC |
-| [include/pokemon_storage_system.h](include/pokemon_storage_system.h) | Minor struct layout adjustment | Ensures consistent struct size under the host compiler |
-
-### Build System
-
-| File | What changed | Why |
-|------|-------------|-----|
-| [Makefile](Makefile) | New `pc` target; host compiler detection (`clang`/`gcc`); SDL2 via `pkg-config`; `PC_OBJS` list excluding GBA-only objects; `SED_PC_CONV` sed pipeline converting ARM assembly directives to x86 GAS syntax | Produces a native executable (`make pc`) alongside the normal GBA ROM build (`make`); ARM `.word`/`@`-comment syntax is invalid in x86 GAS |
-| [sound/MPlayDef.s](sound/MPlayDef.s) / [MPlayDef.s](MPlayDef.s) | `sound/MPlayDef.s` guards ARM-specific assembly directives; `MPlayDef.s` (new) is a one-line root stub that includes it | The GBA build system expects `MPlayDef.s` at the root; ARM-only directives need to be absent or guarded for the PC assembler pass |
-| [README.md](README.md) | PC build prerequisites and instructions | Guides contributors on installing SDL2 and running `make pc` |
+**Why:** Flash-write routines use GBA MMIO flash bus timings and ARM inline assembly.
+The M4A sound engine uses IWRAM code sections, GBA sound registers, and ARM-specific calling
+conventions. None of this compiles or links on x86-64.
 
 ---
+
+## 2. Hardware register access abstracted
+
+**Files:** `src/gpu_regs.c`, `src/main.c`, `src/dma3_manager.c`, `src/link.c`,
+`src/battle_dome.c`
+
+Direct register reads/writes (`REG_VCOUNT`, `REG_IME`, `*(vu32*)REG_ADDR_SIOCNT`, etc.) are
+replaced in `#if PLATFORM_PC` blocks with calls to `PlatformReadReg(offset)`,
+`PlatformWriteReg(offset, val)`, `READ_REG_U8(offset)`, `READ_REG_U32(offset)`, and
+`WRITE_REG_U32(offset, val)` (declared in `platform/io.h`).  The original GBA register access
+lives unchanged in the matching `#else` block.
+
+**Why:** GBA hardware registers live at fixed MMIO addresses (e.g. `0x04000000`) that are not
+mapped in a PC process.  The platform I/O layer redirects reads/writes to the simulated
+display-state machine.
+
+`gpu_regs.c` also gains `#if PLATFORM_PC` versions of `CopyBufferedValueToGpuReg`,
+`GetGpuReg`, and `SyncRegIE` that call through the platform layer instead of the hardware macro.
+
+---
+
+## 3. 64-bit pointer packing (`u32` → `uintptr_t`)
+
+**Files:** `src/task.c`, `src/apprentice.c`, `src/battle_anim_mons.c`, `src/battle_dome.c`,
+`src/battle_factory_screen.c`, `src/braille_puzzles.c`, `src/event_object_movement.c`,
+`src/field_door.c`, `src/field_effect.c`, `src/fldeff_cut.c`, `src/fldeff_dig.c`,
+`src/fldeff_misc.c`, `src/fldeff_rocksmash.c`, `src/fldeff_strength.c`,
+`src/fldeff_sweetscent.c`, `src/fldeff_teleport.c`, `src/list_menu.c`, `src/menu.c`,
+`src/pokeball.c`, `src/pokemon.c`, `src/pokemon_animation.c`, `src/record_mixing.c`,
+`src/shop.c`, `src/slot_machine.c`, `src/trainer_see.c`
+
+The GBA packs a 32-bit pointer into two consecutive `s16` task-data fields using:
+
+```c
+// GBA store:
+data[n]   = (u32)ptr;         // low 16 bits
+data[n+1] = (u32)ptr >> 16;   // high 16 bits
+
+// GBA load:
+ptr = (void *)((u16)data[n] | (data[n+1] << 16));
+```
+
+On PC (64-bit), `u32` silently truncates the upper 32 bits of a pointer.  Every store and load
+is replaced under `#if PLATFORM_PC` with `uintptr_t`:
+
+```c
+// PC store:
+data[n]   = (uintptr_t)ptr;
+data[n+1] = (uintptr_t)ptr >> 16;
+
+// PC load (correct form — (uintptr_t) applied before shift to prevent sign-extension):
+ptr = (void *)((uintptr_t)(u16)data[n] | ((uintptr_t)(u16)data[n+1] << 16));
+```
+
+**Known limitation:** two `s16` fields = 32 bits of storage.  Only the lower 32 bits of the
+pointer are retained.  This is safe on typical 64-bit Windows/Linux builds where code and heap
+reside below the 4 GB mark.
+
+---
+
+## 4. DMA replaced with `memcpy` for palette transfers
+
+**File:** `src/palette.c`
+
+`TransferPlttBuffer`: `DmaCopy16(3, src, dest, PLTT_SIZE)` → `memcpy(dest, src, PLTT_SIZE)`.
+`ReadPlttIntoBuffers`: the copy loop → two `memcpy` calls.
+`#include <string.h>` is added conditionally under `#if PLATFORM_PC`.
+
+**Why:** GBA DMA channels are hardware resources that do not exist on PC.
+
+---
+
+## 5. Tileset VDest pointer arrays: compile-time → runtime init
+
+**File:** `src/tileset_anims.c`
+
+On GBA the four destination-pointer arrays are `const` and initialised with absolute VRAM
+offsets at compile time (e.g. `(u16 *)(BG_VRAM + TILE_OFFSET_4BPP(...))`).  On PC they are
+declared as non-`const` arrays of the correct size with no initialiser, and a new static
+function `InitTilesetAnimVDestPtrs()` fills them at runtime using the same offset arithmetic
+relative to `BG_VRAM` (which on PC resolves to the heap-allocated VRAM base pointer).
+`InitTilesetAnimVDestPtrs()` is called from `InitTilesetAnimations()` under `#if PLATFORM_PC`.
+
+Offset values match the GBA arrays exactly:
+- Mauville Flower1: `NUM_TILES_IN_PRIMARY + 96 + i*4`
+- Mauville Flower2: `NUM_TILES_IN_PRIMARY + 128 + i*4`
+- Rustboro WindyWater: `NUM_TILES_IN_PRIMARY + 128 + i*4`  *(same range as Flower2 — intentional; these tilesets never load simultaneously)*
+- EverGrande Flowers: `NUM_TILES_IN_PRIMARY + 224 + i*4`
+
+**Why:** On GBA `BG_VRAM` is the fixed hardware address `0x06000000`.  On PC VRAM is a heap
+allocation whose address is not known until startup.
+
+---
+
+## 6. RFU / wireless adapter calls skipped on PC
+
+**Files:** `src/main.c`, `src/link.c`
+
+`InitRFU()`, `InitRFUAPI()`, `rfu_LMAN_REQBN_softReset_and_checkID()`, `rfu_REQ_stopMode()`,
+`rfu_waitREQComplete()`, and the `IsWirelessAdapterConnected` connection-test body are all
+wrapped in `#if !PLATFORM_PC` or `#if PLATFORM_GBA`.
+
+**Why:** The RFU wireless adapter communicates over the GBA serial port using its own
+interrupt-driven protocol.  Neither the hardware nor the RFU library exists on PC.
+
+---
+
+## 7. Heap-allocated VRAM / PLTT / OAM pointers
+
+**File:** `src/main.c`
+
+```c
+#if PLATFORM_PC
+u8 *gPCVram = NULL;
+u8 *gPCPltt = NULL;
+u8 *gPCOam  = NULL;
+#endif
+```
+
+**Why:** On GBA `VRAM`, `PLTT`, and `OAM` expand to fixed hardware addresses.  On PC they expand
+to these globals, which are populated at startup with heap allocations so game code can use the
+same macros without faulting.
+
+---
+
+## 8. VBlank wait loop driven by platform register poll
+
+**File:** `src/main.c`
+
+```c
+#if PLATFORM_PC
+static void WaitForVBlank(void)
+{
+    gMain.intrCheck &= ~INTR_FLAG_VBLANK;
+    while (!(gMain.intrCheck & INTR_FLAG_VBLANK))
+        PlatformReadReg(REG_OFFSET_VCOUNT);   // drives simulated display state
+}
+#else
+static void WaitForVBlank(void)
+{
+    gMain.intrCheck &= ~INTR_FLAG_VBLANK;
+    while (!(gMain.intrCheck & INTR_FLAG_VBLANK))
+        ;
+}
+#endif
+```
+
+**Why:** On GBA the busy-spin is woken by a real hardware VBLANK interrupt.  On PC the
+interrupt is simulated; each `PlatformReadReg(REG_OFFSET_VCOUNT)` call pumps the
+display-state machine and eventually fires the simulated interrupt.
+
+---
+
+## 9. Timer-based functions use platform register layer
+
+**File:** `src/main.c`
+
+`StartTimer1()` and `SeedRngAndSetTrainerId()` replace direct `REG_TM1CNT_H`/`REG_TM1CNT_L`
+accesses with `PlatformWriteReg`/`PlatformReadReg` equivalents under `#if PLATFORM_PC`.
+
+---
+
+## 10. Key input read via platform layer
+
+**File:** `src/main.c`
+
+`ReadKeys()`: `REG_KEYINPUT ^ KEYS_MASK` → `PlatformReadReg(REG_OFFSET_KEYINPUT) ^ KEYS_MASK`
+under `#if PLATFORM_PC`.
+
+---
+
+## 11. Interrupt-handler bootstrap skipped on PC
+
+**File:** `src/main.c`
+
+The `DmaCopy32` of `IntrMain` into `IntrMain_Buffer` and the assignment of `INTR_VECTOR` are
+wrapped in `#if PLATFORM_GBA`.  `REG_IME = 1` is replaced with
+`PlatformWriteReg(REG_OFFSET_IME, 1)` under `#if PLATFORM_PC`.
+
+**Why:** On PC the interrupt vector is a redirected C global; the ARM assembly handler and
+IWRAM copy step are not needed.
+
+---
+
+## 12. Save-struct size assertions disabled on PC
+
+**File:** `src/save.c`
+
+```c
+#if !PLATFORM_PC
+STATIC_ASSERT(sizeof(struct SaveBlock2) <= SECTOR_DATA_SIZE, ...);
+STATIC_ASSERT(sizeof(struct SaveBlock1) <= SECTOR_DATA_SIZE * ..., ...);
+STATIC_ASSERT(sizeof(struct PokemonStorage) <= SECTOR_DATA_SIZE * ..., ...);
+#endif
+```
+
+**Why:** The PC save backend uses file I/O, not flash sectors.  The sector-size constraints
+are irrelevant and would fire incorrectly for 64-bit struct layout.
+
+---
+
+## 13. ARM assembly traps replaced with `abort()`
+
+**File:** `src/libisagbprn.c`
+
+In `AGBAssert`, `NoCashGBAAssert`, and `MgbaAssert` the halt-on-assertion path
+`.hword 0xEFFF` (GBA undefined-instruction debug trap) is replaced with `abort()` under
+`#if PLATFORM_GBA` / `#else`.  `#include <stdlib.h>` is added under `#if PLATFORM_PC`.
+
+**Why:** ARM undefined-instruction encoding is not valid x86-64.
+
+---
+
+## 14. BIOS HALT syscall replaced with infinite loop
+
+**File:** `src/script.c`
+
+When the null script pointer is executed on GBA the code does `asm("svc 2")` (BIOS `HALT`).
+On PC this is replaced with `for(;;)` under `#if PLATFORM_GBA` / `#else`.
+
+---
+
+## Bugs fixed in this branch
+
+### Fix: integer promotion before shift in PC pointer reconstruction
+
+Several initial `#if PLATFORM_PC` pointer-load expressions used `(u16)X << 16` where the
+`u16` is promoted to `int` before the shift, which can produce a negative `int` if bit 15 is
+set, causing sign-extension when cast to `uintptr_t`.  All such sites were corrected to
+`(uintptr_t)(u16)X << 16`.
+
+Corrected in: `src/battle_anim_mons.c` (`LoadPointerFromVars`), `src/apprentice.c`
+(`Task_ExecuteFuncAfterButtonPress`), `src/battle_factory_screen.c` (five reconstruction
+sites), `src/pokeball.c` (`Task_PlayCryWhenReleasedFromBall`).
+
+### Fix: `pokeball.c` pointer store using `u32` without PC guard
+
+In `SpriteCB_ReleaseMon`, the `mon` pointer was packed into `tCryTaskMonPtr1`/`tCryTaskMonPtr2`
+using plain `(u32)` casts (truncating the upper 32 bits) while the corresponding load in
+`Task_PlayCryWhenReleasedFromBall` was already guarded with `uintptr_t`.  The store is now
+wrapped in `#if PLATFORM_PC` to use `(uintptr_t)` casts, matching the load.
+
+### Fix: `SetWordTaskArg`/`GetWordTaskArg` truncating 64-bit pointer in `menu.c`
+
+`SetWordTaskArg` and `GetWordTaskArg` have `u32` signatures; calling them with a `uintptr_t`
+pointer silently truncated the upper 32 bits.  The PC-specific versions of
+`DecompressAndLoadBgGfxUsingHeap` and `task_free_buf_after_copying_tile_data_to_vram` in
+`src/menu.c` were updated to use direct `gTasks[taskId].data[n]` field access with `uintptr_t`
+casts, consistent with every other pointer-packing site in the port.
+
+### Fix: `BgDmaFill` address type in `src/menu.c`
+
+`BgDmaFill` computes a byte offset into VRAM and passes it to `RequestDma3Fill` as
+`VRAM + addr`.  On GBA, `VRAM` is the fixed hardware address and `addr` was declared
+`void *`; GCC permits `pointer + void *` as an extension (treating `void *` as byte-sized).
+On PC, `VRAM` expands to `u8 *gPCVram` (a real pointer), so the offset must be an integer
+for valid standard pointer arithmetic.  The `#if PLATFORM_PC` block declares `addr` as `u32`
+instead of `void *`; the GBA path is unchanged.
+
+---
+
+## Header / assembly changes
+
+### `include/global.h`
+
+**`platform.h` and `<stdint.h>` included early**
+
+`#include "platform.h"` is added immediately after the existing standard-library includes so that
+`PLATFORM_PC` / `PLATFORM_GBA` guards are available everywhere downstream in the same translation
+unit.  Under `#if PLATFORM_PC`, `<stdint.h>` is included to guarantee `uintptr_t` and other
+fixed-width types (some toolchains don't pull these in via `<string.h>` alone).
+
+**`T1_READ_PTR` / `T2_READ_PTR` cast through `uintptr_t`**
+
+```c
+// GBA:
+#define T1_READ_PTR(ptr) (u8 *) T1_READ_32(ptr)
+
+// PC:
+#define T1_READ_PTR(ptr) (u8 *)(uintptr_t)(u32)T1_READ_32(ptr)
+```
+
+`T1_READ_32` / `T2_READ_32` assemble a 32-bit little-endian value from four bytes and return
+`int` (the result of the bitwise-OR expression).  On 64-bit without the intermediate casts,
+`(u8 *)(int)value` is implementation-defined; in practice GCC sign-extends negative `int`
+values to 64-bit before the pointer cast, which gives a wrong high-address result.  The
+intermediate `(u32)` cast zero-extends the signed `int` result to an unsigned 32-bit value
+before `(uintptr_t)` widens it to 64 bits, ensuring the conversion follows unsigned widening
+rules even when bit 31 of the datum is set.
+
+**`__attribute__((packed))` on `SaveBlock2` and `SaveBlock1`**
+
+```c
+#if PLATFORM_PC
+} __attribute__((packed)); // sizeof=0xF2C
+#else
+}; // sizeof=0xF2C
+#endif
+```
+
+On 64-bit targets the compiler may insert alignment padding between struct members, changing the
+binary layout and breaking save-file compatibility with the GBA format.  `packed` forces the
+on-disk layout to match the GBA definition exactly.  x86-64 supports unaligned memory accesses
+in hardware so `packed` is safe on PC; the `STATIC_ASSERT` size checks (disabled on PC in
+`save.c`) still document the expected sizes in comments.
+
+---
+
+### `include/pokemon_storage_system.h`
+
+`struct PokemonStorage` receives the same `__attribute__((packed))` treatment as the save blocks
+above, for the same reason: layout must match the GBA binary format for save compatibility.
+
+---
+
+### `include/task.h`
+
+```c
+#if PLATFORM_PC
+#define NUM_TASK_DATA 24  // struct ListMenu is 44 bytes on 64-bit; need data[] >= 44 bytes
+#else
+#define NUM_TASK_DATA 16
+#endif
+```
+
+`struct Task` embeds an `s16 data[NUM_TASK_DATA]` array that game code uses as scratch storage.
+Some subsystems cast the entire `data[]` array to a larger struct (notably `struct ListMenu`).
+On GBA, `struct ListMenu` fits within `16 x sizeof(s16) = 32` bytes.  On 64-bit, pointer
+members in `struct ListMenu` double in size, growing the struct to 44 bytes; `24 x 2 = 48`
+bytes provides enough room.
+
+`SetTaskFuncWithFollowupFunc` and `SwitchTaskToFollowupFunc` reserve `data[NUM_TASK_DATA-2]` and
+`data[NUM_TASK_DATA-1]` for a packed follow-up function pointer.  Because both the store and the
+load use `NUM_TASK_DATA - 2` symbolically, they track the same slot regardless of whether
+`NUM_TASK_DATA` is 16 (GBA) or 24 (PC) — no index mismatch.
+
+---
+
+### `include/agb_flash.h`
+
+```c
+#if PLATFORM_PC
+void SetFlashFilePath(const char *path);
+#endif
+```
+
+Declares a PC-only helper that overrides the save-file path used by the PC flash emulation
+layer (default: `"pokeemerald.sav"` in the working directory).  Not present on GBA because
+flash is hardware-mapped and has no concept of a file path.
+
+---
+
+### `include/m4a.h`
+
+```c
+#if PLATFORM_PC
+void m4aSoundShutdown(void);
+#endif
+```
+
+Declares a PC-only teardown function that closes the SDL audio device cleanly on exit.
+Registered via `atexit()` in `pc_main.c`.  Has no GBA equivalent because the hardware simply
+powers off.
+
+---
+
+### `sound/MPlayDef.s`
+
+```asm
+#if PLATFORM_PC
+    .include "sound/voicegroups/pc_voicegroup_offsets.inc"
+#endif
+```
+
+On GBA, voicegroup data is linked into ROM at fixed addresses that the M4A engine references
+directly.  On PC, ROM is not present; `pc_voicegroup_offsets.inc` provides the runtime-computed
+base addresses for each voicegroup so the PC audio engine can locate them without embedded ROM
+pointers.  The `#if PLATFORM_PC` guard ensures the GBA build is unaffected.

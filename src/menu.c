@@ -1797,6 +1797,7 @@ void *DecompressAndCopyTileDataToVram(u8 bgId, const void *src, u32 size, u16 of
 
 #if PLATFORM_PC
 // On PC, pointers are 64-bit so uintptr_t is required to store/retrieve them via task args.
+// SetWordTaskArg only handles u32, so use direct field access to avoid silent truncation.
 void DecompressAndLoadBgGfxUsingHeap(u8 bgId, const void *src, u32 size, u16 offset, u8 mode)
 {
     u32 sizeOut;
@@ -1807,7 +1808,8 @@ void DecompressAndLoadBgGfxUsingHeap(u8 bgId, const void *src, u32 size, u16 off
     {
         u8 taskId = CreateTask(task_free_buf_after_copying_tile_data_to_vram, 0);
         gTasks[taskId].data[0] = copy_decompressed_tile_data_to_vram(bgId, ptr, size, offset, mode);
-        SetWordTaskArg(taskId, 1, (uintptr_t)ptr);
+        gTasks[taskId].data[1] = (uintptr_t)ptr;
+        gTasks[taskId].data[2] = (uintptr_t)ptr >> 16;
     }
 }
 #else
@@ -1831,7 +1833,7 @@ void task_free_buf_after_copying_tile_data_to_vram(u8 taskId)
 {
     if (!CheckForSpaceForDma3Request(gTasks[taskId].data[0]))
     {
-        Free((void *)(uintptr_t)GetWordTaskArg(taskId, 1));
+        Free((void *)((uintptr_t)(u16)gTasks[taskId].data[1] | ((uintptr_t)(u16)gTasks[taskId].data[2] << 16)));
         DestroyTask(taskId);
     }
 }

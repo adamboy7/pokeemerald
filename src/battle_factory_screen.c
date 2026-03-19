@@ -2486,7 +2486,7 @@ static void Swap_Task_HandleYesNo(u8 taskId)
                 hiPtr = gTasks[taskId].tFollowUpTaskPtrHi;
                 loPtr = gTasks[taskId].tFollowUpTaskPtrLo;
 #if PLATFORM_PC
-                gTasks[taskId].func = (void *)(uintptr_t)(((u16)(hiPtr) << 16) | (u16)(loPtr));
+                gTasks[taskId].func = (void *)(uintptr_t)(((uintptr_t)(u16)(hiPtr) << 16) | (u16)(loPtr));
 #else
                 gTasks[taskId].func = (void *)((hiPtr << 16) | loPtr);
 #endif
@@ -2499,7 +2499,7 @@ static void Swap_Task_HandleYesNo(u8 taskId)
                 hiPtr = gTasks[taskId].tFollowUpTaskPtrHi;
                 loPtr = gTasks[taskId].tFollowUpTaskPtrLo;
 #if PLATFORM_PC
-                gTasks[taskId].func = (void *)(uintptr_t)(((u16)(hiPtr) << 16) | (u16)(loPtr));
+                gTasks[taskId].func = (void *)(uintptr_t)(((uintptr_t)(u16)(hiPtr) << 16) | (u16)(loPtr));
 #else
                 gTasks[taskId].func = (void *)((hiPtr << 16) | loPtr);
 #endif
@@ -2513,7 +2513,7 @@ static void Swap_Task_HandleYesNo(u8 taskId)
             hiPtr = gTasks[taskId].tFollowUpTaskPtrHi;
             loPtr = gTasks[taskId].tFollowUpTaskPtrLo;
 #if PLATFORM_PC
-            gTasks[taskId].func = (void *)(uintptr_t)(((u16)(hiPtr) << 16) | (u16)(loPtr));
+            gTasks[taskId].func = (void *)(uintptr_t)(((uintptr_t)(u16)(hiPtr) << 16) | (u16)(loPtr));
 #else
             gTasks[taskId].func = (void *)((hiPtr << 16) | loPtr);
 #endif
@@ -3117,7 +3117,7 @@ static void Swap_Task_ScreenInfoTransitionOut(u8 taskId)
             hiPtr = gTasks[taskId].tFollowUpTaskPtrHi;
             loPtr = gTasks[taskId].tFollowUpTaskPtrLo;
 #if PLATFORM_PC
-            gTasks[taskId].func = (void *)(uintptr_t)(((u16)(hiPtr) << 16) | (u16)(loPtr));
+            gTasks[taskId].func = (void *)(uintptr_t)(((uintptr_t)(u16)(hiPtr) << 16) | (u16)(loPtr));
 #else
             gTasks[taskId].func = (void *)((hiPtr << 16) | (loPtr));
 #endif
@@ -3228,7 +3228,7 @@ static void Swap_Task_ScreenInfoTransitionIn(u8 taskId)
         hiPtr = gTasks[taskId].tFollowUpTaskPtrHi;
         loPtr = gTasks[taskId].tFollowUpTaskPtrLo;
 #if PLATFORM_PC
-        gTasks[taskId].func = (void *)(uintptr_t)(((u16)(hiPtr) << 16) | (u16)(loPtr));
+        gTasks[taskId].func = (void *)(uintptr_t)(((uintptr_t)(u16)(hiPtr) << 16) | (u16)(loPtr));
 #else
         gTasks[taskId].func = (void *)((hiPtr << 16) | (loPtr));
 #endif

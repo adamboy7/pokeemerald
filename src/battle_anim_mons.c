@@ -1962,7 +1962,7 @@ void StorePointerInVars(s16 *lo, s16 *hi, const void *ptr)
 void *LoadPointerFromVars(s16 lo, s16 hi)
 {
 #if PLATFORM_PC
-    return (void *)(uintptr_t)((u16)lo | ((u16)hi << 16));
+    return (void *)(uintptr_t)((u16)lo | ((uintptr_t)(u16)hi << 16));
 #else
     return (void *)((u16)lo | ((u16)hi << 16));
 #endif

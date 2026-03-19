@@ -117,7 +117,9 @@
 #define T1_READ_16(ptr) ((ptr)[0] | ((ptr)[1] << 8))
 #define T1_READ_32(ptr) ((ptr)[0] | ((ptr)[1] << 8) | ((ptr)[2] << 16) | ((ptr)[3] << 24))
 #if PLATFORM_PC
-#define T1_READ_PTR(ptr) (u8 *)(uintptr_t)T1_READ_32(ptr)
+// Cast through (u32) first so that T1_READ_32's signed int result is zero-extended
+// (not sign-extended) when widened to uintptr_t, giving a correct 64-bit address.
+#define T1_READ_PTR(ptr) (u8 *)(uintptr_t)(u32)T1_READ_32(ptr)
 #else
 #define T1_READ_PTR(ptr) (u8 *) T1_READ_32(ptr)
 #endif
@@ -127,7 +129,9 @@
 #define T2_READ_16(ptr) ((ptr)[0] + ((ptr)[1] << 8))
 #define T2_READ_32(ptr) ((ptr)[0] + ((ptr)[1] << 8) + ((ptr)[2] << 16) + ((ptr)[3] << 24))
 #if PLATFORM_PC
-#define T2_READ_PTR(ptr) (void *)(uintptr_t)T2_READ_32(ptr)
+// Cast through (u32) first so that T2_READ_32's signed int result is zero-extended
+// (not sign-extended) when widened to uintptr_t, giving a correct 64-bit address.
+#define T2_READ_PTR(ptr) (void *)(uintptr_t)(u32)T2_READ_32(ptr)
 #else
 #define T2_READ_PTR(ptr) (void *) T2_READ_32(ptr)
 #endif
