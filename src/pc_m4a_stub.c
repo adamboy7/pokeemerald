@@ -8,6 +8,7 @@ extern const u8 gClockTable[];
 extern const u8 gScaleTable[];
 extern const u32 gFreqTable[];
 extern const XcmdFunc gXcmdTable[];
+extern u32 MidiKeyToFreq(struct WaveData *wav, u8 key, u8 fineAdjust);
 
 // Storage for symbols normally provided by the GBA linker script.
 u16 gNumMusicPlayers = 4;
@@ -26,25 +27,6 @@ u32 umul3232H32(u32 multiplier, u32 multiplicand)
 void Clear64byte(void *addr)
 {
     memset(addr, 0, 64);
-}
-
-u32 MidiKeyToFreq(struct WaveData *wav, u8 key, u8 fineAdjust)
-{
-    u32 fineAdjustShifted = (u32)fineAdjust << 24;
-
-    if (key > 178)
-    {
-        key = 178;
-        fineAdjustShifted = 255u << 24;
-    }
-
-    u32 val1 = gScaleTable[key];
-    val1 = gFreqTable[val1 & 0xF] >> (val1 >> 4);
-
-    u32 val2 = gScaleTable[key + 1];
-    val2 = gFreqTable[val2 & 0xF] >> (val2 >> 4);
-
-    return umul3232H32(wav->freq, val1 + umul3232H32(val2 - val1, fineAdjustShifted));
 }
 
 // ============================================================
@@ -264,7 +246,7 @@ void ply_goto(struct MusicPlayerInfo *mplayInfo, struct MusicPlayerTrack *track)
 {
     (void)mplayInfo;
     u8 *p = track->cmdPtr;
-    u32 target = (u32)p[0] | ((u32)p[1] << 8) | ((u32)p[2] << 16) | ((u32)p[3] << 24);
+    uintptr_t target = (u32)p[0] | ((u32)p[1] << 8) | ((u32)p[2] << 16) | ((u32)p[3] << 24);
     track->cmdPtr = (u8 *)target;
 }
 
@@ -522,7 +504,7 @@ void ply_xxx(struct MusicPlayerInfo *mplayInfo, struct MusicPlayerTrack *track)
 void ply_xwave(struct MusicPlayerInfo *mplayInfo, struct MusicPlayerTrack *track)
 {
     (void)mplayInfo;
-    u32 wav = (u32)track->cmdPtr[0]
+    uintptr_t wav = (u32)track->cmdPtr[0]
             | ((u32)track->cmdPtr[1] << 8)
             | ((u32)track->cmdPtr[2] << 16)
             | ((u32)track->cmdPtr[3] << 24);
