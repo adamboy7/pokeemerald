@@ -290,7 +290,7 @@ SED_PC_CONV := sed \
   -e 's/[[:space:]]@.*$$//' \
   -e 's/__GAS_MACRO_AT__/\\@/g'
 
-pc: generated $(BUILD_DIR)/pc/pokeemerald
+pc: tools generated $(BUILD_DIR)/pc/pokeemerald
 
 $(BUILD_DIR)/pc/pokeemerald: $(PC_OBJS)
 	mkdir -p $(dir $@)
