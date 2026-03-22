@@ -16,13 +16,17 @@ $(SONG_BUILDDIR)/%.o: $(SONG_SUBDIR)/%.s
 $(MID_BUILDDIR)/%.o: $(MID_ASM_DIR)/%.s
 	$(AS) $(ASFLAGS) -I sound -o $@ $<
 
+# Compute .bin targets from all .wav source files so `make generated` builds them.
+DIRECT_SOUND_WAV_SRCS := $(wildcard $(CRY_SUBDIR)/*.wav sound/direct_sound_samples/*.wav)
+AUTO_GEN_TARGETS += $(DIRECT_SOUND_WAV_SRCS:.wav=.bin)
+
 # Compressed cries
-$(CRY_BIN_DIR)/%.bin: $(CRY_SUBDIR)/%.wav
+$(CRY_BIN_DIR)/%.bin: $(CRY_SUBDIR)/%.wav | $(TOOLS_DIR)/wav2agb
 # NOTE: If using ipatix's High Quality Audio Mixer, remove "--no-pad" below.
 	$(WAV2AGB) -b -c -l 1 --no-pad $< $@
 
 # Uncompressed sounds
-$(SOUND_BIN_DIR)/%.bin: sound/%.wav 
+$(SOUND_BIN_DIR)/%.bin: sound/%.wav | $(TOOLS_DIR)/wav2agb
 	$(WAV2AGB) -b $< $@
 
 # For each line in midi.cfg, we do some trickery to convert it into a make rule for the `.mid` file described on the line
