@@ -92,19 +92,56 @@ u16 Sqrt(u32 num)
     return (u16)sqrt((double)num);
 }
 
+// GBA BIOS ArcTan (SWI 0x09).
+// Uses the same fixed-point Chebyshev polynomial as the real BIOS.
+// Input: x in [-1.0, 1.0) as 1.8 fixed-point (256 = 1.0).
+// Output: angle in [-pi/4, pi/4] as binary-angle (0x8000 = pi).
+static s16 ArcTanFixed(s32 i)
+{
+    s32 a = -((i * i) >> 14);
+    s32 b = ((0xA9 * a) >> 14) + 0x390;
+    b = ((b * a) >> 14) + 0x91C;
+    b = ((b * a) >> 14) + 0xFB6;
+    b = ((b * a) >> 14) + 0x16AA;
+    b = ((b * a) >> 14) + 0x2081;
+    b = ((b * a) >> 14) + 0x3651;
+    b = ((b * a) >> 14) + 0xA2F9;
+    return (s16)((i * b) >> 16);
+}
+
 u16 ArcTan(s16 x)
 {
-    // GBA ArcTan takes a fixed-point value where 256 represents 1.0.
-    double angle = atan((double)x / 256.0);
-    return (u16)(angle * 0x8000 / M_PI);
+    return (u16)ArcTanFixed(x);
 }
 
 u16 ArcTan2(s16 x, s16 y)
 {
-    double angle = atan2((double)y, (double)x);
-    if (angle < 0)
-        angle += 2 * M_PI;
-    return (u16)(angle * 0x8000 / M_PI);
+    if (!y)
+        return (x >= 0) ? 0 : 0x8000;
+    if (!x)
+        return (y >= 0) ? 0x4000 : 0xC000;
+    if (y >= 0)
+    {
+        if (x >= 0)
+        {
+            if (x >= y)
+                return (u16)ArcTanFixed((y << 14) / x);
+        }
+        else if (-x >= y)
+            return (u16)(ArcTanFixed((y << 14) / x) + 0x8000);
+        return (u16)(0x4000 - ArcTanFixed((x << 14) / y));
+    }
+    else
+    {
+        if (x <= 0)
+        {
+            if (-x > -y)
+                return (u16)(ArcTanFixed((y << 14) / x) + 0x8000);
+        }
+        else if (x >= -y)
+            return (u16)(ArcTanFixed((y << 14) / x) + 0x10000);
+        return (u16)(0xC000 - ArcTanFixed((x << 14) / y));
+    }
 }
 
 void CpuSet(const void *src, void *dest, u32 control)
@@ -322,7 +359,7 @@ void HuffUnComp(const u8 *src, void *dest)
 
             u8 nodeVal = tree[nodeIdx];
             u32 pairBase = nodeIdx & ~1u;
-            u32 childPair = pairBase + (nodeVal & 0x3E) + 2;
+            u32 childPair = pairBase + (nodeVal & 0x7E) + 2;
             u32 childIdx = childPair + bit;
             // bit 7 = left child is leaf, bit 6 = right child is leaf
             bool isLeaf = (nodeVal >> (7u - bit)) & 1u;
@@ -451,14 +488,14 @@ int MultiBoot(struct MultiBootParam *mp)
 s32 Div(s32 num, s32 denom)
 {
     if (denom == 0)
-        return 0;
+        return (num < 0) ? -1 : 1; // matches GBA hardware / mGBA behaviour
     return num / denom;
 }
 
 s32 Mod(s32 num, s32 denom)
 {
     if (denom == 0)
-        return 0;
+        return num; // hardware remainder = numerator when denominator is zero
     return num % denom;
 }
 
