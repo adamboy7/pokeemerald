@@ -227,6 +227,10 @@ OBJS_REL := $(patsubst $(OBJ_DIR)/%,%,$(OBJS))
 PC_OBJ_DIR := $(BUILD_DIR)/pc
 PC_OBJS := $(addprefix $(PC_OBJ_DIR)/,$(filter-out src/crt0.o src/m4a.o src/m4a_1.o src/rom_header.o src/librfu_intr.o src/librfu_rfu.o src/librfu_sio32id.o src/librfu_stwi.o src/multiboot.o src/pc_multiboot.o src/libgcnmultiboot.o src/siirtc.o src/AgbRfu_LinkManager.o src/link_rfu_2.o src/link_rfu_3.o,$(OBJS_REL)))
 PC_OBJS += $(PC_OBJ_DIR)/src/pc_bios.o $(PC_OBJ_DIR)/src/pc_main.o $(PC_OBJ_DIR)/src/pc_audio.o $(PC_OBJ_DIR)/src/pc_io_reg.o $(PC_OBJ_DIR)/src/pc_multiboot.o $(PC_OBJ_DIR)/src/pc_rtc.o $(PC_OBJ_DIR)/src/pc_m4a_stub.o $(PC_OBJ_DIR)/src/libgcnmultiboot.o $(PC_OBJ_DIR)/libagbsyscall/libagbsyscall.o
+# Remove MIDI objects whose symbols are already provided by a pre-converted .s in
+# sound/songs/. Songs that only exist as .mid (no .s counterpart) are kept.
+PC_MID_DUPS := $(foreach s,$(SONG_SRCS),$(PC_OBJ_DIR)/sound/songs/midi/$(notdir $(s:.s=.o)))
+PC_OBJS := $(filter-out $(PC_MID_DUPS),$(PC_OBJS))
 PKG_CONFIG := $(shell which pkg-config 2>/dev/null)
 ifeq ($(PKG_CONFIG),)
   ifeq ($(SDL_CFLAGS),)
@@ -289,7 +293,7 @@ $(BUILD_DIR)/pc/pokeemerald: $(PC_OBJS)
 # Compile C sources for the PC build.
 $(PC_OBJ_DIR)/%.o: %.c
 	mkdir -p $(dir $@)
-	$(HOSTCC) -DMODERN=$(MODERN) -DPLATFORM_PC -DUSE_SDL -D__INTELLISENSE__ -I include -include gba/types.h \
+	$(HOSTCC) -DMODERN=$(MODERN) -DPLATFORM_PC -DUSE_SDL -DUBFIX -D__INTELLISENSE__ -I include -include gba/types.h \
 	$(SDL_CFLAGS) $(NO_PIE_CFLAGS) -c $< -o $@
 
 # Convert MIDI files into objects for the PC build.
