@@ -265,8 +265,15 @@ const struct PokemonCrySong gPokemonCrySongTemplate =
     .blockCount = 0,
     .priority = 255,
     .reverb = 0,
+#if PLATFORM_GBA
     .tone = (struct ToneData *)&voicegroup_dummy,
     .part = {NULL, NULL},
+#else
+    // .tone and .part are always overwritten in SetPokemonCryTone before use;
+    // pointer-to-integer casts are not valid C constant expressions.
+    .tone = 0,
+    .part = {0, 0},
+#endif
     .gap = 0,
     .part0 = TUNE,
     .tuneValue = C_V,

@@ -705,6 +705,15 @@ static void DispatchInterrupts(void)
 
 static void UpdateDisplayState(void)
 {
+    // Re-entrancy guard: the new SetGpuReg PC path calls PlatformReadReg /
+    // PlatformWriteReg from within CopyBufferedValueToGpuReg, which would
+    // re-enter here from an interrupt handler mid-update.  Mirrors GBA
+    // hardware where interrupts are masked during handler execution.
+    static bool sInUpdate = false;
+    if (sInUpdate)
+        return;
+    sInUpdate = true;
+
     PollInput();
     Uint64 now = SDL_GetPerformanceCounter();
     Uint64 freq = SDL_GetPerformanceFrequency();
@@ -747,6 +756,7 @@ static void UpdateDisplayState(void)
 
     sPrevDispstat = dispstat;
     DispatchInterrupts();
+    sInUpdate = false;
 }
 
 static void UpdateTimers(void)

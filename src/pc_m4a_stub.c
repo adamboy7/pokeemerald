@@ -8,6 +8,10 @@ extern const u8 gClockTable[];
 extern const u8 gScaleTable[];
 extern const u32 gFreqTable[];
 extern const XcmdFunc gXcmdTable[];
+extern const u8 gCgbScaleTable[];
+extern const s16 gCgbFreqTable[];
+extern const u8 gNoiseTable[];
+extern const u8 gCgb3Vol[];
 extern u32 MidiKeyToFreq(struct WaveData *wav, u8 key, u8 fineAdjust);
 
 // Storage for symbols normally provided by the GBA linker script.
@@ -30,12 +34,347 @@ void Clear64byte(void *addr)
 }
 
 // ============================================================
-// CGB stubs (not used for DirectSound music on PC)
+// CGB oscillator state (persisted between SoundMain calls)
 // ============================================================
 
-void CgbSound(void) {}
-void CgbOscOff(u8 ch) { (void)ch; }
-u32 MidiKeyToCgbFreq(u8 a, u8 b, u8 c) { (void)a; (void)b; (void)c; return 0; }
+// 32-bit phase accumulators for ch1-ch4 oscillators.
+static u32 sCgbPhase[4];
+// 15-bit LFSR for ch4 noise.
+static u32 sCgbLfsr = 0x7FFF;
+
+// ============================================================
+// MidiKeyToCgbFreq  (ported from m4a.c)
+// ============================================================
+
+u32 MidiKeyToCgbFreq(u8 chanNum, u8 key, u8 fineAdjust)
+{
+    if (chanNum == 4)
+    {
+        if (key <= 20)
+        {
+            key = 0;
+        }
+        else
+        {
+            key -= 21;
+            if (key > 59)
+                key = 59;
+        }
+        return gNoiseTable[key];
+    }
+    else
+    {
+        s32 val1;
+        s32 val2;
+
+        if (key <= 35)
+        {
+            fineAdjust = 0;
+            key = 0;
+        }
+        else
+        {
+            key -= 36;
+            if (key > 130)
+            {
+                key = 130;
+                fineAdjust = 255;
+            }
+        }
+
+        val1 = gCgbScaleTable[key];
+        val1 = gCgbFreqTable[val1 & 0xF] >> (val1 >> 4);
+
+        val2 = gCgbScaleTable[key + 1];
+        val2 = gCgbFreqTable[val2 & 0xF] >> (val2 >> 4);
+
+        return val1 + ((fineAdjust * (val2 - val1)) >> 8) + 2048;
+    }
+}
+
+// ============================================================
+// CgbOscOff  —  silence a CGB channel and reset its oscillator
+// ============================================================
+
+void CgbOscOff(u8 chanNum)
+{
+    if (chanNum < 1 || chanNum > 4)
+        return;
+    sCgbPhase[chanNum - 1] = 0;
+    if (chanNum == 4)
+        sCgbLfsr = 0x7FFF;
+}
+
+// ============================================================
+// CgbPan / CgbModVol  (ported from m4a.c — no HW register writes)
+// ============================================================
+
+static int CgbPan(struct CgbChannel *chan)
+{
+    u32 rightVolume = chan->rightVolume;
+    u32 leftVolume  = chan->leftVolume;
+
+    if ((rightVolume = (u8)rightVolume) >= (leftVolume = (u8)leftVolume))
+    {
+        if (rightVolume / 2 >= leftVolume)
+        {
+            chan->pan = 0x0F;
+            return 1;
+        }
+    }
+    else
+    {
+        if (leftVolume / 2 >= rightVolume)
+        {
+            chan->pan = 0xF0;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+void CgbModVol(struct CgbChannel *chan)
+{
+    struct SoundInfo *soundInfo = SOUND_INFO_PTR;
+
+    if ((soundInfo->mode & 1) || !CgbPan(chan))
+    {
+        chan->pan = 0xFF;
+        chan->envelopeGoal = (u32)(chan->leftVolume + chan->rightVolume);
+        chan->envelopeGoal /= 16;
+    }
+    else
+    {
+        chan->envelopeGoal = (u32)(chan->leftVolume + chan->rightVolume);
+        chan->envelopeGoal /= 16;
+        if (chan->envelopeGoal > 15)
+            chan->envelopeGoal = 15;
+    }
+
+    chan->sustainGoal = (chan->envelopeGoal * chan->sustain + 15) >> 4;
+    chan->pan &= chan->panMask;
+}
+
+// ============================================================
+// CgbSound  —  CGB ADSR envelope update (ported from m4a.c)
+//              Hardware register writes replaced with state tracking.
+// ============================================================
+
+void CgbSound(void)
+{
+    s32 ch;
+    struct CgbChannel *channels;
+    s32 prevC15;
+    s32 envelopeStepTimeAndDir;
+    struct SoundInfo *soundInfo = SOUND_INFO_PTR;
+    const int mask = 0xFF;
+
+    if (soundInfo->c15)
+        soundInfo->c15--;
+    else
+        soundInfo->c15 = 14;
+
+    for (ch = 1, channels = soundInfo->cgbChans; ch <= 4; ch++, channels++)
+    {
+        if (!(channels->statusFlags & SOUND_CHANNEL_SF_ON))
+            continue;
+
+        prevC15 = soundInfo->c15;
+        envelopeStepTimeAndDir = 0;
+
+        /* 2. ADSR envelope state machine */
+        if (channels->statusFlags & SOUND_CHANNEL_SF_START)
+        {
+            if (!(channels->statusFlags & SOUND_CHANNEL_SF_STOP))
+            {
+                channels->statusFlags = SOUND_CHANNEL_SF_ENV_ATTACK;
+                channels->modify = CGB_CHANNEL_MO_PIT | CGB_CHANNEL_MO_VOL;
+                CgbModVol(channels);
+
+                // Reset oscillator phase on new note.
+                sCgbPhase[ch - 1] = 0;
+                if (ch == 4)
+                    sCgbLfsr = 0x7FFF;
+
+                switch (ch)
+                {
+                case 1:
+                case 2:
+                    envelopeStepTimeAndDir = channels->attack + CGB_NRx2_ENV_DIR_INC;
+                    channels->n4 = channels->length ? 0x40 : 0x00;
+                    break;
+                case 3:
+                    // Load wave data pointer if changed.
+                    if (channels->wavePointer != channels->currentPointer)
+                        channels->currentPointer = channels->wavePointer;
+                    channels->n4 = channels->length ? 0xC0 : 0x80;
+                    break;
+                default: // ch4
+                    envelopeStepTimeAndDir = channels->attack + CGB_NRx2_ENV_DIR_INC;
+                    channels->n4 = channels->length ? 0x40 : 0x00;
+                    break;
+                }
+
+                channels->envelopeCounter = channels->attack;
+                if ((s8)(channels->attack & mask))
+                {
+                    channels->envelopeVolume = 0;
+                    goto envelope_step_complete;
+                }
+                else
+                {
+                    goto envelope_decay_start;
+                }
+            }
+            else
+            {
+                goto oscillator_off;
+            }
+        }
+        else if (channels->statusFlags & SOUND_CHANNEL_SF_IEC)
+        {
+            channels->pseudoEchoLength--;
+            if ((s8)(channels->pseudoEchoLength & mask) <= 0)
+            {
+            oscillator_off:
+                CgbOscOff(ch);
+                channels->statusFlags = 0;
+                goto channel_complete;
+            }
+            goto envelope_complete;
+        }
+        else if ((channels->statusFlags & SOUND_CHANNEL_SF_STOP) && (channels->statusFlags & SOUND_CHANNEL_SF_ENV))
+        {
+            channels->statusFlags &= ~SOUND_CHANNEL_SF_ENV;
+            channels->envelopeCounter = channels->release;
+            if ((s8)(channels->release & mask))
+            {
+                channels->modify |= CGB_CHANNEL_MO_VOL;
+                if (ch != 3)
+                    envelopeStepTimeAndDir = channels->release | CGB_NRx2_ENV_DIR_DEC;
+                goto envelope_step_complete;
+            }
+            else
+            {
+                goto envelope_pseudoecho_start;
+            }
+        }
+        else
+        {
+        envelope_step_repeat:
+            if (channels->envelopeCounter == 0)
+            {
+                if (ch == 3)
+                    channels->modify |= CGB_CHANNEL_MO_VOL;
+
+                CgbModVol(channels);
+                if ((channels->statusFlags & SOUND_CHANNEL_SF_ENV) == SOUND_CHANNEL_SF_ENV_RELEASE)
+                {
+                    channels->envelopeVolume--;
+                    if ((s8)(channels->envelopeVolume & mask) <= 0)
+                    {
+                    envelope_pseudoecho_start:
+                        channels->envelopeVolume = ((channels->envelopeGoal * channels->pseudoEchoVolume) + 0xFF) >> 8;
+                        if (channels->envelopeVolume)
+                        {
+                            channels->statusFlags |= SOUND_CHANNEL_SF_IEC;
+                            channels->modify |= CGB_CHANNEL_MO_VOL;
+                            if (ch != 3)
+                                envelopeStepTimeAndDir = 0 | CGB_NRx2_ENV_DIR_INC;
+                            goto envelope_complete;
+                        }
+                        else
+                        {
+                            goto oscillator_off;
+                        }
+                    }
+                    else
+                    {
+                        channels->envelopeCounter = channels->release;
+                    }
+                }
+                else if ((channels->statusFlags & SOUND_CHANNEL_SF_ENV) == SOUND_CHANNEL_SF_ENV_SUSTAIN)
+                {
+                envelope_sustain:
+                    channels->envelopeVolume = channels->sustainGoal;
+                    channels->envelopeCounter = 7;
+                }
+                else if ((channels->statusFlags & SOUND_CHANNEL_SF_ENV) == SOUND_CHANNEL_SF_ENV_DECAY)
+                {
+                    s32 envelopeVolume, sustainGoal;
+
+                    channels->envelopeVolume--;
+                    envelopeVolume = (s8)(channels->envelopeVolume & mask);
+                    sustainGoal    = (s8)(channels->sustainGoal);
+                    if (envelopeVolume <= sustainGoal)
+                    {
+                    envelope_sustain_start:
+                        if (channels->sustain == 0)
+                        {
+                            channels->statusFlags &= ~SOUND_CHANNEL_SF_ENV;
+                            goto envelope_pseudoecho_start;
+                        }
+                        else
+                        {
+                            channels->statusFlags--;
+                            channels->modify |= CGB_CHANNEL_MO_VOL;
+                            if (ch != 3)
+                                envelopeStepTimeAndDir = 0 | CGB_NRx2_ENV_DIR_INC;
+                            goto envelope_sustain;
+                        }
+                    }
+                    else
+                    {
+                        channels->envelopeCounter = channels->decay;
+                    }
+                }
+                else
+                {
+                    channels->envelopeVolume++;
+                    if ((u8)(channels->envelopeVolume & mask) >= channels->envelopeGoal)
+                    {
+                    envelope_decay_start:
+                        channels->statusFlags--;
+                        channels->envelopeCounter = channels->decay;
+                        if ((u8)(channels->envelopeCounter & mask))
+                        {
+                            channels->modify |= CGB_CHANNEL_MO_VOL;
+                            channels->envelopeVolume = channels->envelopeGoal;
+                            if (ch != 3)
+                                envelopeStepTimeAndDir = channels->decay | CGB_NRx2_ENV_DIR_DEC;
+                        }
+                        else
+                        {
+                            goto envelope_sustain_start;
+                        }
+                    }
+                    else
+                    {
+                        channels->envelopeCounter = channels->attack;
+                    }
+                }
+            }
+        }
+
+    envelope_step_complete:
+        // Every 15 frames, advance the envelope counter twice to keep pace with
+        // the 64 Hz hardware clock (15 × 4 = 60 Hz vs 64 Hz).
+        channels->envelopeCounter--;
+        if (prevC15 == 0)
+        {
+            prevC15--;
+            goto envelope_step_repeat;
+        }
+
+    envelope_complete:
+        // On GBA: apply pitch/volume to NRxx hardware registers.
+        // On PC: state is already up-to-date; no action needed.
+        (void)envelopeStepTimeAndDir;
+
+    channel_complete:
+        channels->modify = 0;
+    }
+}
 
 // ============================================================
 // Channel linked-list management
@@ -508,7 +847,7 @@ void ply_xwave(struct MusicPlayerInfo *mplayInfo, struct MusicPlayerTrack *track
             | ((u32)track->cmdPtr[1] << 8)
             | ((u32)track->cmdPtr[2] << 16)
             | ((u32)track->cmdPtr[3] << 24);
-    track->tone.wav = (struct WaveData *)wav;
+    track->tone.wav = (u32)wav;
     track->cmdPtr += 4;
 }
 
@@ -639,10 +978,14 @@ void ply_note(u32 note_cmd, struct MusicPlayerInfo *mplayInfo, struct MusicPlaye
     if (toneType & (TONEDATA_TYPE_SPL | TONEDATA_TYPE_RHY))
     {
         // SPL: key split table; RHY: direct index into sub-tone array.
+        // Guard against unresolved voicegroup symbols (pc_voicegroup_offsets.inc sets them to 0).
+        if (tone->wav == 0)
+            return;
+
         u8 subIdx;
         if (toneType & TONEDATA_TYPE_SPL)
         {
-            u8 *splitTable = (u8 *)tone->wav;
+            u8 *splitTable = (u8 *)(uintptr_t)tone->wav;
             subIdx = splitTable[noteKey];
         }
         else
@@ -650,7 +993,7 @@ void ply_note(u32 note_cmd, struct MusicPlayerInfo *mplayInfo, struct MusicPlaye
             subIdx = noteKey;
         }
 
-        struct ToneData *subToneArray = (struct ToneData *)tone->wav;
+        struct ToneData *subToneArray = (struct ToneData *)(uintptr_t)tone->wav;
         struct ToneData *sub = &subToneArray[subIdx];
 
         // Reject doubly-nested SPL/RHY.
@@ -769,7 +1112,7 @@ void ply_note(u32 note_cmd, struct MusicPlayerInfo *mplayInfo, struct MusicPlaye
 
     ch->rhythmPan       = (u8)rhythmPan;
     ch->type            = tone->type;
-    ch->wav             = tone->wav;
+    ch->wav             = (struct WaveData *)(uintptr_t)tone->wav;
     ch->attack          = tone->attack;
     ch->decay           = tone->decay;
     ch->sustain         = tone->sustain;
@@ -783,14 +1126,38 @@ void ply_note(u32 note_cmd, struct MusicPlayerInfo *mplayInfo, struct MusicPlaye
     s32 finalKey = (s32)noteKey + (s8)track->keyM;
     if (finalKey < 0) finalKey = 0;
 
-    ch->key        = (u8)finalKey;
-    ch->count      = track->unk_3C;
-    ch->frequency  = MidiKeyToFreq(ch->wav, (u8)finalKey, track->pitM);
+    ch->key = (u8)finalKey;
 
-    // PC mixer: initialise playback position.
-    if (ch->wav != NULL)
-        ch->currentPointer = ch->wav->data;
-    ch->fw = 0;
+    if (chanType)
+    {
+        // CGB channel: use CGB frequency table and set sweep/length fields.
+        struct CgbChannel *cgbCh = (struct CgbChannel *)ch;
+
+        cgbCh->length = tone->length;
+
+        // Sweep for ch1: validate the pan_sweep field.
+        // If bits 7 or 6:4 are not set (i.e. it looks like a raw pan byte rather
+        // than a sweep register), default to 8 (no sweep, no shift direction).
+        u8 ps = tone->pan_sweep;
+        cgbCh->sweep = ((ps & 0x80) || !(ps & 0x70)) ? 8 : ps;
+
+        ch->frequency = soundInfo->MidiKeyToCgbFreq(chanType, (u8)finalKey, track->pitM);
+
+        // Reset oscillator phase so the note starts from the beginning.
+        sCgbPhase[chanType - 1] = 0;
+        if (chanType == 4)
+            sCgbLfsr = 0x7FFF;
+    }
+    else
+    {
+        // DirectSound channel: set playback position and count.
+        ch->count = track->unk_3C;
+        ch->frequency = MidiKeyToFreq(ch->wav, (u8)finalKey, track->pitM);
+
+        if (ch->wav != NULL)
+            ch->currentPointer = ch->wav->data;
+        ch->fw = 0;
+    }
 
     ch->statusFlags = SOUND_CHANNEL_SF_START;
 
@@ -989,13 +1356,25 @@ void MPlayMain(struct MusicPlayerInfo *mplayInfo)
             if (track->flags & MPT_FLG_VOLCHG)
             {
                 ChnVolSet(track, ch);
-                // envelopeVolumeRight/Left already updated inside ChnVolSet for PC.
-                (void)isCGB;
+                if (isCGB)
+                {
+                    struct CgbChannel *cgbCh = (struct CgbChannel *)ch;
+                    CgbModVol(cgbCh);
+                    cgbCh->modify |= CGB_CHANNEL_MO_VOL;
+                }
             }
 
             if (track->flags & MPT_FLG_PITCHG)
             {
-                if (!isCGB && ch->wav != NULL)
+                if (isCGB)
+                {
+                    struct CgbChannel *cgbCh = (struct CgbChannel *)ch;
+                    s32 key = (s32)(u8)ch->key + (s8)track->keyM;
+                    if (key < 0) key = 0;
+                    ch->frequency = soundInfo->MidiKeyToCgbFreq(isCGB, (u8)key, track->pitM);
+                    cgbCh->modify |= CGB_CHANNEL_MO_PIT;
+                }
+                else if (ch->wav != NULL)
                 {
                     s32 key = (s32)(u8)ch->key + (s8)track->keyM;
                     if (key < 0) key = 0;
@@ -1124,7 +1503,7 @@ void MPlayStart(struct MusicPlayerInfo *mplayInfo, struct SongHeader *songHeader
         mplayInfo->ident++;
         mplayInfo->status     = 0;
         mplayInfo->songHeader = songHeader;
-        mplayInfo->tone       = songHeader->tone;
+        mplayInfo->tone       = (struct ToneData *)(uintptr_t)songHeader->tone;
         mplayInfo->priority   = songHeader->priority;
         mplayInfo->clock      = 0;
         mplayInfo->tempoD     = 150;
@@ -1141,7 +1520,7 @@ void MPlayStart(struct MusicPlayerInfo *mplayInfo, struct SongHeader *songHeader
             TrackStop(mplayInfo, track);
             track->flags  = MPT_FLG_EXIST | MPT_FLG_START;
             track->chan   = NULL;
-            track->cmdPtr = songHeader->part[i];
+            track->cmdPtr = (u8 *)(uintptr_t)songHeader->part[i];
             i++;
             track++;
         }
@@ -1171,6 +1550,9 @@ void SoundMain(void)
     // Advance the music sequencer (all players via the MPlayMainHead chain).
     if (soundInfo->MPlayMainHead != NULL)
         soundInfo->MPlayMainHead(soundInfo->musicPlayerHead);
+
+    // Update CGB channel ADSR envelopes.
+    soundInfo->CgbSound();
 
     // ---------- DirectSound PCM mixer ----------
     int nSamples = soundInfo->pcmSamplesPerVBlank;
@@ -1249,6 +1631,154 @@ void SoundMain(void)
         ch->fw = fw;
     }
 
+    // ---------- CGB channel synthesiser ----------
+    // Mix software oscillators for all 4 CGB channels into the same buffers.
+    if (soundInfo->cgbChans != NULL)
+    {
+        for (int ci = 0; ci < 4; ci++)
+        {
+            struct CgbChannel *cgb = &soundInfo->cgbChans[ci];
+
+            if (!(cgb->statusFlags & SOUND_CHANNEL_SF_ON))
+                continue;
+            if (cgb->statusFlags & SOUND_CHANNEL_SF_STOP)
+                continue;
+
+            u32 envelopeVol = cgb->envelopeVolume;  // 0-15
+            if (envelopeVol == 0)
+                continue;
+
+            // Scale so a full-volume CGB channel (~±120) is comparable to DirectSound.
+            s32 amp = (s32)(envelopeVol * 8 * soundInfo->masterVolume) >> 4;
+
+            int rightOn = (cgb->pan & 0x0F) != 0;
+            int leftOn  = (cgb->pan & 0xF0) != 0;
+            if (!rightOn && !leftOn)
+                continue;
+
+            if (ci == 0 || ci == 1)
+            {
+                // ---- Ch1 / Ch2: square wave ----
+                u32 freq_reg = cgb->frequency;
+                if (freq_reg >= 2048)
+                    continue;
+                u32 period = 2048 - freq_reg;
+                // step = 131072 / period / pcmFreq * 2^32
+                u32 step = (u32)(((u64)131072 << 32) / ((u64)period * (u32)pcmFreq));
+
+                // Duty cycle 0-3 → fraction of period that is high.
+                // wavePointer stores the duty index as a small integer (0-3).
+                u8 duty = (u8)((uintptr_t)cgb->wavePointer & 3);
+                static const u32 kDutyThresh[4] = {
+                    0x20000000u,  // 12.5 %
+                    0x40000000u,  // 25 %
+                    0x80000000u,  // 50 %
+                    0xC0000000u,  // 75 %
+                };
+                u32 thresh = kDutyThresh[duty];
+                u32 phase  = sCgbPhase[ci];
+
+                for (int s = 0; s < nSamples; s++)
+                {
+                    phase += step;
+                    s32 sample = (phase < thresh) ? amp : -amp;
+                    if (rightOn) mixR[s] += (s16)sample;
+                    if (leftOn)  mixL[s] += (s16)sample;
+                }
+                sCgbPhase[ci] = phase;
+            }
+            else if (ci == 2)
+            {
+                // ---- Ch3: wave channel (32 × 4-bit samples) ----
+                // wavePointer points to 4 u32 values (16 bytes = 32 nibbles).
+                u8 *waveData = (u8 *)(uintptr_t)cgb->wavePointer;
+                // Reject obviously invalid pointers (small integers = not loaded).
+                if ((uintptr_t)waveData < 64)
+                    continue;
+
+                u32 freq_reg = cgb->frequency;
+                if (freq_reg >= 2048)
+                    continue;
+                u32 period = 2048 - freq_reg;
+                // Wave channel: f = 131072 / period Hz (same formula as ch1/ch2 square wave).
+                // step = 131072 / period / pcmFreq * 2^32
+                u32 step = (u32)(((u64)131072 << 32) / ((u64)period * (u32)pcmFreq));
+
+                // Map gCgb3Vol NR32 code → output level multiplier (×/4 units).
+                // Ch3 uses NR32-quantized volume only; envelopeVol drives the ADSR
+                // but the actual output level is determined by gCgb3Vol lookup.
+                u8 nr32 = gCgb3Vol[envelopeVol];
+                int vol3;  // in units of 1/4 of full scale
+                switch (nr32 & 0xE0)
+                {
+                case 0x20: vol3 = 4; break;  // 100 %
+                case 0x40: vol3 = 2; break;  //  50 %
+                case 0x60: vol3 = 1; break;  //  25 %
+                case 0x80: vol3 = 3; break;  //  75 % (GBA-specific force bit)
+                default:   continue;         // mute (0x00)
+                }
+                s32 ch3base = (s32)(soundInfo->masterVolume * 8);  // max at 100%
+
+                u32 phase = sCgbPhase[ci];
+                for (int s = 0; s < nSamples; s++)
+                {
+                    phase += step;
+                    // Top 5 bits of the phase index the 32 4-bit samples.
+                    u32 idx  = phase >> 27;         // 0-31
+                    u8  byte = waveData[idx >> 1];
+                    s32 nibble = (idx & 1) ? (byte & 0xF) : (byte >> 4);
+                    // Signed, centred at 8; multiply by NR32 volume level.
+                    s32 sample = (nibble - 8) * ch3base * vol3 / (8 * 4);
+                    if (rightOn) mixR[s] += (s16)sample;
+                    if (leftOn)  mixL[s] += (s16)sample;
+                }
+                sCgbPhase[ci] = phase;
+            }
+            else
+            {
+                // ---- Ch4: noise (LFSR) ----
+                u32 nr43  = cgb->frequency;  // NR43 value from gNoiseTable
+                u8  ratio = nr43 & 0x07;
+                u8  shift = (nr43 >> 4) & 0x0F;
+                int mode7 = (nr43 >> 3) & 0x01;
+
+                // LFSR clock rate:
+                //   ratio 0: f = 524288 >> shift
+                //   ratio r: f = (524288 / r) >> (shift + 1)
+                u32 lfsr_hz = (ratio == 0) ? (524288u >> shift)
+                                           : ((524288u / ratio) >> (shift + 1));
+                if (lfsr_hz == 0)
+                    continue;
+
+                // Fractional step: how many LFSR ticks advance per output sample.
+                // Use 16.16 fixed-point: step = lfsr_hz * 65536 / pcmFreq.
+                u32 step = (u32)(((u64)lfsr_hz << 16) / (u32)pcmFreq);
+                u32 frac = sCgbPhase[ci];   // fractional accumulator (16.16)
+                u32 lfsr = sCgbLfsr;
+
+                for (int s = 0; s < nSamples; s++)
+                {
+                    frac += step;
+                    // Integer part = number of LFSR steps this sample.
+                    u32 ticks = frac >> 16;
+                    frac &= 0xFFFF;
+                    while (ticks--)
+                    {
+                        u32 xorBit = (lfsr ^ (lfsr >> 1)) & 1u;
+                        lfsr >>= 1;
+                        lfsr |= xorBit << (mode7 ? 6 : 14);
+                    }
+                    s32 sample = (lfsr & 1u) ? amp : -amp;
+                    if (rightOn) mixR[s] += (s16)sample;
+                    if (leftOn)  mixL[s] += (s16)sample;
+                }
+                sCgbPhase[ci] = frac;
+                sCgbLfsr = lfsr;
+            }
+        }
+    }
+
+    // ---------- Clamp and write output ----------
     for (int s = 0; s < nSamples; s++)
     {
         s32 l = mixL[s], r = mixR[s];

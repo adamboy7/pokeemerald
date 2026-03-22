@@ -54,6 +54,7 @@ struct WaveData
 #define TONEDATA_P_S_PAN    0xc0
 #define TONEDATA_P_S_PAM    TONEDATA_P_S_PAN
 
+#if PLATFORM_GBA
 struct ToneData
 {
     u8 type;
@@ -66,6 +67,23 @@ struct ToneData
     u8 sustain;
     u8 release;
 };
+#else
+// On PC, voicegroup data is assembled in GBA 32-bit format (.4byte for pointers).
+// Using u32 for the pointer field keeps sizeof(ToneData) == 12, matching the
+// assembly stride used by the voice_group macro (hardcoded 0xC).
+struct ToneData
+{
+    u8 type;
+    u8 key;
+    u8 length; // sound length (compatible sound)
+    u8 pan_sweep; // pan or sweep (compatible sound ch. 1)
+    u32 wav;      // struct WaveData * stored as 32-bit host address
+    u8 attack;
+    u8 decay;
+    u8 sustain;
+    u8 release;
+};
+#endif
 
 #define SOUND_CHANNEL_SF_START       0x80
 #define SOUND_CHANNEL_SF_STOP        0x40
@@ -220,6 +238,7 @@ struct SoundInfo
     s8 ALIGNED(4) pcmBuffer[PCM_DMA_BUF_SIZE * 2];
 };
 
+#if PLATFORM_GBA
 struct SongHeader
 {
     u8 trackCount;
@@ -229,6 +248,19 @@ struct SongHeader
     struct ToneData *tone;
     u8 *part[1];
 };
+#else
+// On PC, song data is assembled in GBA 32-bit format.
+// u32 pointer fields keep the base struct 8 bytes, matching the assembly layout.
+struct SongHeader
+{
+    u8 trackCount;
+    u8 blockCount;
+    u8 priority;
+    u8 reverb;
+    u32 tone;     // struct ToneData * stored as 32-bit host address
+    u32 part[1];  // u8 * stored as 32-bit host addresses (variable length)
+};
+#endif
 
 struct PokemonCrySong
 {
@@ -236,8 +268,15 @@ struct PokemonCrySong
     u8 blockCount;
     u8 priority;
     u8 reverb;
+#if PLATFORM_GBA
     struct ToneData *tone;
     u8 *part[2];
+#else
+    // u32 keeps sizeof(PokemonCrySong) layout identical to GBA (no pointer padding),
+    // matching the field offsets the sound engine and MPlayStart expect.
+    u32 tone;     // struct ToneData *
+    u32 part[2];  // u8 *
+#endif
     u8 gap;
     u8 part0; // 0x11
     u8 tuneValue; // 0x12

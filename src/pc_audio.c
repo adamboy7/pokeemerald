@@ -190,7 +190,11 @@ void SampleFreqSet(u32 freq)
     freq = (freq & 0xF0000) >> 16;
     soundInfo->freq = freq;
     soundInfo->pcmSamplesPerVBlank = gPcmSamplesPerVBlankTable[freq - 1];
-    soundInfo->pcmDmaPeriod = PCM_DMA_BUF_SIZE / soundInfo->pcmSamplesPerVBlank;
+    // On PC, SoundMain always fills pcmBuffer starting at offset 0. Using
+    // pcmDmaPeriod=1 keeps the SDL callback's read offset at 0 every call,
+    // matching where SoundMain writes. The GBA multi-segment circular buffer
+    // scheme does not apply on PC.
+    soundInfo->pcmDmaPeriod = 1;
     soundInfo->pcmFreq = (597275 * soundInfo->pcmSamplesPerVBlank + 5000) / 10000;
     soundInfo->divFreq = (16777216 / soundInfo->pcmFreq + 1) >> 1;
     soundInfo->pcmDmaCounter = soundInfo->pcmDmaPeriod;
@@ -269,7 +273,7 @@ void SoundClear(void)
     {
         ((struct SoundChannel *)chan)->statusFlags = 0;
         i--;
-        chan = (void *)((s32)chan + sizeof(struct SoundChannel));
+        chan = (void *)((uintptr_t)chan + sizeof(struct SoundChannel));
     }
 
     chan = soundInfo->cgbChans;
@@ -283,7 +287,7 @@ void SoundClear(void)
             soundInfo->CgbOscOff(i);
             ((struct CgbChannel *)chan)->statusFlags = 0;
             i++;
-            chan = (void *)((s32)chan + sizeof(struct CgbChannel));
+            chan = (void *)((uintptr_t)chan + sizeof(struct CgbChannel));
         }
     }
 
@@ -341,6 +345,12 @@ void m4aSoundVSync(void)
 void m4aSoundInit(void)
 {
     s32 i;
+
+    // Close any existing SDL audio device before reinitialising.
+    // m4aSoundInit can be called more than once (e.g. RegisterRamReset then
+    // AgbMain); without this a second SDL audio thread would be opened and
+    // both threads would race on gSoundInfo.
+    m4aSoundShutdown();
 
     // SoundMainRAM copy is a no-op on PC (SoundMainRAM is a dummy buffer,
     // not ARM code); the PC SoundMain() function replaces it directly.
@@ -770,9 +780,9 @@ start_song:
 
     gPokemonCrySongs[i] = gPokemonCrySong;
 
-    gPokemonCrySongs[i].tone = tone;
-    gPokemonCrySongs[i].part[0] = &gPokemonCrySongs[i].part0;
-    gPokemonCrySongs[i].part[1] = &gPokemonCrySongs[i].part1;
+    gPokemonCrySongs[i].tone = (u32)(uintptr_t)tone;
+    gPokemonCrySongs[i].part[0] = (u32)(uintptr_t)&gPokemonCrySongs[i].part0;
+    gPokemonCrySongs[i].part[1] = (u32)(uintptr_t)&gPokemonCrySongs[i].part1;
     gPokemonCrySongs[i].gotoTarget = (u32)&gPokemonCrySongs[i].cont;
 
     mplayInfo->ident = ID_NUMBER;
