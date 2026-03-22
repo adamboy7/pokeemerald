@@ -42,8 +42,12 @@ void SoftResetExram(void)
 
 void RegisterRamReset(u32 resetFlags)
 {
-    // Only sound registers are handled explicitly. Other flags are
-    // ignored as they have no direct analogue on PC builds.
+    if (resetFlags & RESET_VRAM)
+        memset(gPCVram, 0, VRAM_SIZE);
+    if (resetFlags & RESET_PALETTE)
+        memset(gPCPltt, 0, PLTT_SIZE);
+    if (resetFlags & RESET_OAM)
+        memset(gPCOam, 0, OAM_SIZE);
     if (resetFlags & RESET_SOUND_REGS)
         m4aSoundInit();
 }

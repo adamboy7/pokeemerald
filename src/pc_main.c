@@ -8,9 +8,9 @@
 int main(void)
 {
     atexit(m4aSoundShutdown);
-    gPCVram = malloc(VRAM_SIZE);
-    gPCPltt = malloc(PLTT_SIZE);
-    gPCOam = malloc(OAM_SIZE);
+    gPCVram = calloc(1, VRAM_SIZE);
+    gPCPltt = calloc(1, PLTT_SIZE);
+    gPCOam = calloc(1, OAM_SIZE);
     if (!gPCVram || !gPCPltt || !gPCOam)
     {
         fprintf(stderr, "Failed to allocate video memory\n");

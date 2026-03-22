@@ -12,8 +12,16 @@
 #include <stdint.h>
 extern uintptr_t gPCDmaSrc[4];
 extern uintptr_t gPCDmaDst[4];
+// Fire a DMA_START_NOW transfer immediately, before the call stack unwinds.
+// Called from PC_DMA_RECORD so that fill-value temporaries are still live,
+// and so that Dma3FillLarge_/Dma3CopyLarge_ loops fire every chunk in order.
+void PCFireDmaNow(int dmaNum);
 #define PC_DMA_RECORD(dmaNum, src, dest) \
-    do { gPCDmaSrc[dmaNum] = (uintptr_t)(src); gPCDmaDst[dmaNum] = (uintptr_t)(dest); } while (0)
+    do { \
+        gPCDmaSrc[dmaNum] = (uintptr_t)(src); \
+        gPCDmaDst[dmaNum] = (uintptr_t)(dest); \
+        PCFireDmaNow(dmaNum); \
+    } while (0)
 #else
 #define PLATFORM_GBA 1
 #define PC_DMA_RECORD(dmaNum, src, dest) do {} while (0)

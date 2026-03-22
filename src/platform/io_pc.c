@@ -550,6 +550,8 @@ static void Render(void)
                         bool vflip   = (entry & 0x800) != 0;
                         u8   palBank = entry >> 12;
                         u8 *tile = charBase + tileNum * tileSize;
+                        if (tile + tileSize > gPCVram + VRAM_SIZE)
+                            continue;
                         int tx = hflip ? (7 - inTileX) : inTileX;
                         int ty = vflip ? (7 - inTileY)  : inTileY;
 
@@ -646,6 +648,8 @@ static void Render(void)
                         tileIndex = tileNum + tileCol + tileRowM * 32;
 
                     u8 *tile = OBJ_VRAM0 + tileIndex * tileSz;
+                    if (tile + tileSz > gPCVram + VRAM_SIZE)
+                        continue;
                     u16 colorIdx;
                     if (is8bpp)
                     {
@@ -810,6 +814,93 @@ static void UpdateTimers(void)
     }
 }
 
+// Execute a single DMA channel immediately using the full-width shadow pointers.
+// Shared by both PCFireDmaNow and HandleDmas to avoid duplication.
+static void FireDmaChannel(int i, bool renderAfter)
+{
+    u32 base = REG_OFFSET_DMA0 + i * 12;
+    u16 control = READ_REG_U16(base + 10);
+
+    u8 *srcPtr = (u8 *)gPCDmaSrc[i];
+    u8 *dstPtr = (u8 *)gPCDmaDst[i];
+    u16 count = READ_REG_U16(base + 8);
+    u32 units = count;
+    if (units == 0)
+        units = (i == 3) ? 0x10000 : 0x4000;
+
+    u32 unit = (control & DMA_32BIT) ? 4 : 2;
+    s32 srcStep = unit;
+    s32 dstStep = unit;
+
+    switch (control & (DMA_SRC_DEC | DMA_SRC_FIXED))
+    {
+    case DMA_SRC_DEC:
+        srcStep = -((s32)unit);
+        break;
+    case DMA_SRC_FIXED:
+        srcStep = 0;
+        break;
+    }
+
+    switch (control & (DMA_DEST_DEC | DMA_DEST_FIXED | DMA_DEST_RELOAD))
+    {
+    case DMA_DEST_DEC:
+        dstStep = -((s32)unit);
+        break;
+    case DMA_DEST_FIXED:
+        dstStep = 0;
+        break;
+    default:
+        break;
+    }
+
+    for (u32 j = 0; j < units; j++)
+    {
+        if (unit == 4)
+            *(u32 *)dstPtr = *(u32 *)srcPtr;
+        else
+            *(u16 *)dstPtr = *(u16 *)srcPtr;
+        srcPtr += srcStep;
+        dstPtr += dstStep;
+    }
+
+    // Write back updated addresses to both shadow and I/O register array.
+    gPCDmaSrc[i] = (uintptr_t)srcPtr;
+    gPCDmaDst[i] = (uintptr_t)dstPtr;
+    WRITE_REG_U32(base, (u32)(uintptr_t)srcPtr);
+    WRITE_REG_U32(base + 4, (u32)(uintptr_t)dstPtr);
+
+    if (!(control & DMA_REPEAT))
+    {
+        control &= ~DMA_ENABLE;
+        WRITE_REG_U16(base + 10, control);
+    }
+
+    if (control & DMA_INTR_ENABLE)
+        WRITE_REG_U16(REG_OFFSET_IF, READ_REG_U16(REG_OFFSET_IF) | (INTR_FLAG_DMA0 << i));
+
+    if (renderAfter)
+        RenderAndPresent();
+}
+
+// Called from PC_DMA_RECORD immediately after DmaSetUnchecked arms a channel.
+// Fires DMA_START_NOW transfers right away so that:
+//   (a) fill-value temporaries (from DMA_FILL_UNCHECKED) are still on the stack, and
+//   (b) Dma3FillLarge_/Dma3CopyLarge_ loops correctly fire every chunk in order
+//       rather than only the last one.
+// VBLANK/HBLANK start DMAs are left pending for HandleDmas to fire at the
+// correct phase.
+void PCFireDmaNow(int dmaNum)
+{
+    u32 base = REG_OFFSET_DMA0 + dmaNum * 12;
+    u16 control = READ_REG_U16(base + 10);
+    if (!(control & DMA_ENABLE))
+        return;
+    if ((control & DMA_START_MASK) != DMA_START_NOW)
+        return;
+    FireDmaChannel(dmaNum, false);
+}
+
 static void HandleDmas(void)
 {
     u16 dispstat = READ_REG_U16(REG_OFFSET_DISPSTAT);
@@ -831,69 +922,13 @@ static void HandleDmas(void)
             continue;
         // DMA_START_SPECIAL is used for video-capture / sound FIFO — treated as
         // immediate for compatibility (game code enabling these expects them to fire).
+        // DMA_START_NOW transfers are fired immediately by PCFireDmaNow, so
+        // HandleDmas only reaches here for non-START_NOW channels.
 
         // Use the full-width shadow pointers to avoid 64-bit truncation.
         // gPCDmaSrc/gPCDmaDst are written by DmaSetUnchecked (via PC_DMA_RECORD)
         // before the DMA_ENABLE bit is set; they hold the complete host address.
-        u8 *srcPtr = (u8 *)gPCDmaSrc[i];
-        u8 *dstPtr = (u8 *)gPCDmaDst[i];
-        u16 count = READ_REG_U16(base + 8);
-        u32 units = count;
-        if (units == 0)
-            units = (i == 3) ? 0x10000 : 0x4000;
-
-        u32 unit = (control & DMA_32BIT) ? 4 : 2;
-        s32 srcStep = unit;
-        s32 dstStep = unit;
-
-        switch (control & (DMA_SRC_DEC | DMA_SRC_FIXED))
-        {
-        case DMA_SRC_DEC:
-            srcStep = -((s32)unit);
-            break;
-        case DMA_SRC_FIXED:
-            srcStep = 0;
-            break;
-        }
-
-        switch (control & (DMA_DEST_DEC | DMA_DEST_FIXED | DMA_DEST_RELOAD))
-        {
-        case DMA_DEST_DEC:
-            dstStep = -((s32)unit);
-            break;
-        case DMA_DEST_FIXED:
-            dstStep = 0;
-            break;
-        default:
-            break;
-        }
-
-        for (u32 j = 0; j < units; j++)
-        {
-            if (unit == 4)
-                *(u32 *)dstPtr = *(u32 *)srcPtr;
-            else
-                *(u16 *)dstPtr = *(u16 *)srcPtr;
-            srcPtr += srcStep;
-            dstPtr += dstStep;
-        }
-
-        // Write back updated addresses to both shadow and I/O register array.
-        gPCDmaSrc[i] = (uintptr_t)srcPtr;
-        gPCDmaDst[i] = (uintptr_t)dstPtr;
-        WRITE_REG_U32(base, (u32)(uintptr_t)srcPtr);
-        WRITE_REG_U32(base + 4, (u32)(uintptr_t)dstPtr);
-
-        if (!(control & DMA_REPEAT))
-        {
-            control &= ~DMA_ENABLE;
-            WRITE_REG_U16(base + 10, control);
-        }
-
-        if (control & DMA_INTR_ENABLE)
-            WRITE_REG_U16(REG_OFFSET_IF, READ_REG_U16(REG_OFFSET_IF) | (INTR_FLAG_DMA0 << i));
-
-        RenderAndPresent();
+        FireDmaChannel(i, true);
     }
 }
 
