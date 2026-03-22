@@ -848,6 +848,7 @@ static void FireDmaChannel(int i, bool renderAfter)
         dstStep = -((s32)unit);
         break;
     case DMA_DEST_FIXED:
+    case DMA_DEST_RELOAD: // on repeat, GBA resets dest to initial value each trigger
         dstStep = 0;
         break;
     default:
@@ -903,9 +904,18 @@ void PCFireDmaNow(int dmaNum)
 
 static void HandleDmas(void)
 {
+    // Track rising edges so each HBLANK/VBLANK DMA fires exactly once per
+    // transition rather than on every PlatformReadReg/PlatformWriteReg call.
+    static bool sPrevHBlank = false;
+    static bool sPrevVBlank = false;
+
     u16 dispstat = READ_REG_U16(REG_OFFSET_DISPSTAT);
     bool inVBlank = (dispstat & DISPSTAT_VBLANK) != 0;
     bool inHBlank = (dispstat & DISPSTAT_HBLANK) != 0;
+    bool vBlankEdge = inVBlank && !sPrevVBlank;
+    bool hBlankEdge = inHBlank && !sPrevHBlank;
+    sPrevVBlank = inVBlank;
+    sPrevHBlank = inHBlank;
 
     for (int i = 0; i < DMA_CHANNELS; i++)
     {
@@ -916,14 +926,14 @@ static void HandleDmas(void)
 
         // Check start condition: only fire the DMA during the requested phase.
         u16 startMode = control & DMA_START_MASK;
-        if (startMode == DMA_START_VBLANK && !inVBlank)
+        if (startMode == DMA_START_NOW)
+            continue; // PCFireDmaNow fires these immediately; skip here.
+        if (startMode == DMA_START_VBLANK && !vBlankEdge)
             continue;
-        if (startMode == DMA_START_HBLANK && !inHBlank)
+        if (startMode == DMA_START_HBLANK && !hBlankEdge)
             continue;
         // DMA_START_SPECIAL is used for video-capture / sound FIFO — treated as
         // immediate for compatibility (game code enabling these expects them to fire).
-        // DMA_START_NOW transfers are fired immediately by PCFireDmaNow, so
-        // HandleDmas only reaches here for non-START_NOW channels.
 
         // Use the full-width shadow pointers to avoid 64-bit truncation.
         // gPCDmaSrc/gPCDmaDst are written by DmaSetUnchecked (via PC_DMA_RECORD)

@@ -794,7 +794,7 @@ void ProcessSpriteCopyRequests(void)
             if (sSpriteCopyRequests[i].dest >= gPCVram &&
                 sSpriteCopyRequests[i].dest + sSpriteCopyRequests[i].size <= gPCVram + VRAM_SIZE)
 #endif
-            CpuCopy16(sSpriteCopyRequests[i].src, sSpriteCopyRequests[i].dest, sSpriteCopyRequests[i].size);
+                CpuCopy16(sSpriteCopyRequests[i].src, sSpriteCopyRequests[i].dest, sSpriteCopyRequests[i].size);
             sSpriteCopyRequestCount--;
             i++;
         }
