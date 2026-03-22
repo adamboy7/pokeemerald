@@ -69,16 +69,41 @@ static void InitVideo(void)
         return;
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER) != 0)
+    {
+        fprintf(stderr, "SDL_Init(VIDEO) failed: %s\n", SDL_GetError());
         exit(1);
+    }
 
     sWindow = SDL_CreateWindow("pokeemerald", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-                               240, 160, SDL_WINDOW_RESIZABLE);
+                               240, 160, SDL_WINDOW_RESIZABLE | SDL_WINDOW_SHOWN);
+    if (sWindow == NULL)
+    {
+        fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
+        exit(1);
+    }
+
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "nearest");
     sRenderer = SDL_CreateRenderer(sWindow, -1, SDL_RENDERER_ACCELERATED);
+    if (sRenderer == NULL)
+    {
+        // Fallback to software renderer if hardware acceleration is unavailable.
+        sRenderer = SDL_CreateRenderer(sWindow, -1, SDL_RENDERER_SOFTWARE);
+        if (sRenderer == NULL)
+        {
+            fprintf(stderr, "SDL_CreateRenderer failed: %s\n", SDL_GetError());
+            exit(1);
+        }
+    }
+
     SDL_RenderSetLogicalSize(sRenderer, 240, 160);
     SDL_RenderSetIntegerScale(sRenderer, SDL_TRUE);
     sTexture = SDL_CreateTexture(sRenderer, SDL_PIXELFORMAT_ARGB8888,
                                  SDL_TEXTUREACCESS_STREAMING, 240, 160);
+    if (sTexture == NULL)
+    {
+        fprintf(stderr, "SDL_CreateTexture failed: %s\n", SDL_GetError());
+        exit(1);
+    }
 
     // Open the first available controller so gamepad input can be mapped to
     // REG_KEYINPUT alongside the keyboard state.
@@ -853,6 +878,27 @@ static void FireDmaChannel(int i, bool renderAfter)
         break;
     default:
         break;
+    }
+
+    // Clamp the transfer count so it cannot write past the end of a PC-allocated
+    // video buffer.  Title-screen resource loads (bg tilemaps, sprite sheets) use
+    // raw DmaCopy16 calls that skip the higher-level sprite-copy bounds guards;
+    // an oversized transfer would corrupt the adjacent malloc chunk's metadata.
+    if (dstStep > 0)
+    {
+        u8 *limit = NULL;
+        if (dstPtr >= gPCVram && dstPtr < gPCVram + VRAM_SIZE)
+            limit = gPCVram + VRAM_SIZE;
+        else if (gPCPltt && dstPtr >= gPCPltt && dstPtr < gPCPltt + PLTT_SIZE)
+            limit = gPCPltt + PLTT_SIZE;
+        else if (gPCOam  && dstPtr >= gPCOam  && dstPtr < gPCOam  + OAM_SIZE)
+            limit = gPCOam  + OAM_SIZE;
+        if (limit)
+        {
+            u32 available = (u32)(limit - dstPtr) / unit;
+            if (units > available)
+                units = available;
+        }
     }
 
     for (u32 j = 0; j < units; j++)
