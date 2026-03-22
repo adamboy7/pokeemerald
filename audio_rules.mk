@@ -17,7 +17,7 @@ $(MID_BUILDDIR)/%.o: $(MID_ASM_DIR)/%.s
 	$(AS) $(ASFLAGS) -I sound -o $@ $<
 
 # Compute .bin targets from all .wav source files so `make generated` builds them.
-DIRECT_SOUND_WAV_SRCS := $(wildcard $(CRY_SUBDIR)/*.wav sound/direct_sound_samples/*.wav)
+DIRECT_SOUND_WAV_SRCS := $(wildcard $(CRY_SUBDIR)/*.wav sound/direct_sound_samples/*.wav sound/direct_sound_samples/phonemes/*.wav)
 AUTO_GEN_TARGETS += $(DIRECT_SOUND_WAV_SRCS:.wav=.bin)
 
 # Compressed cries
