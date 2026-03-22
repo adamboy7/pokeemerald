@@ -114,7 +114,7 @@ INCLUDE_CPP_ARGS := $(INCLUDE_DIRS:%=-iquote %)
 INCLUDE_SCANINC_ARGS := $(INCLUDE_DIRS:%=-I %)
 
 O_LEVEL ?= 2
-CPPFLAGS := $(INCLUDE_CPP_ARGS) -Wno-trigraphs -DMODERN=$(MODERN)
+CPPFLAGS := $(INCLUDE_CPP_ARGS) -Wno-trigraphs -DMODERN=$(MODERN) -DPLATFORM_GBA=1
 ifeq ($(MODERN),0)
   CPPFLAGS += -I tools/agbcc/include -I tools/agbcc -nostdinc -undef -std=gnu89
   CC1 := tools/agbcc/bin/agbcc$(EXE)
@@ -265,6 +265,12 @@ else
   endif
 endif
 
+PC_LDFLAGS :=
+ifeq ($(ASAN), 1)
+NO_PIE_CFLAGS  += -fsanitize=address -fno-omit-frame-pointer
+PC_LDFLAGS     += -fsanitize=address
+endif
+
 SUBDIRS  := $(sort $(dir $(OBJS)))
 $(shell mkdir -p $(SUBDIRS))
 
@@ -288,13 +294,13 @@ pc: generated $(BUILD_DIR)/pc/pokeemerald
 
 $(BUILD_DIR)/pc/pokeemerald: $(PC_OBJS)
 	mkdir -p $(dir $@)
-	$(HOSTCC) $(PC_OBJS) $(AUDIO_LIBS) -lm $(NO_PIE_LDFLAGS) -o $@
+	$(HOSTCC) $(PC_OBJS) $(AUDIO_LIBS) -lm $(NO_PIE_LDFLAGS) $(PC_LDFLAGS) -g -o $@
 
 # Compile C sources for the PC build.
 $(PC_OBJ_DIR)/%.o: %.c
 	mkdir -p $(dir $@)
 	$(HOSTCC) -DMODERN=$(MODERN) -DPLATFORM_PC -DUSE_SDL -DUBFIX -D__INTELLISENSE__ -I include -include gba/types.h \
-	$(SDL_CFLAGS) $(NO_PIE_CFLAGS) -c $< -o $@
+	$(SDL_CFLAGS) $(NO_PIE_CFLAGS) -g -c $< -o $@
 
 # Convert MIDI files into objects for the PC build.
 $(PC_OBJ_DIR)/sound/songs/midi/%.o: sound/songs/midi/%.mid
