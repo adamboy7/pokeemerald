@@ -108,7 +108,7 @@ void SetGpuReg(u8 regOffset, u16 value)
 #endif
 
 #if PLATFORM_PC
-        if ((vcount >= 161 && vcount <= 225) || (PlatformReadReg(REG_OFFSET_DISPCNT) & DISPCNT_FORCED_BLANK))
+        if ((vcount >= 160 && vcount <= 227) || (READ_REG_U16(REG_OFFSET_DISPCNT) & DISPCNT_FORCED_BLANK))
 #else
         if ((vcount >= 161 && vcount <= 225) || (REG_DISPCNT & DISPCNT_FORCED_BLANK))
 #endif
@@ -148,7 +148,7 @@ void SetGpuReg_ForcedBlank(u8 regOffset, u16 value)
             CopyBufferedValueToGpuReg(regOffset);
             return;
         }
-        if (PlatformReadReg(REG_OFFSET_DISPCNT) & DISPCNT_FORCED_BLANK)
+        if (READ_REG_U16(REG_OFFSET_DISPCNT) & DISPCNT_FORCED_BLANK)
 #else
         if (REG_DISPCNT & DISPCNT_FORCED_BLANK)
 #endif

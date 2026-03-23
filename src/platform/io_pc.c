@@ -3,6 +3,7 @@
 #if PLATFORM_PC
 #include <SDL2/SDL.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
@@ -658,7 +659,7 @@ static void Render(void)
                     int idx = screenY * 240 + screenX;
                     if (anyWin && !(sWindowMask[idx] & (1 << LAYER_OBJ)))
                         continue;
-                    if (sPriorityBuf[idx] <= priority)
+                    if (sPriorityBuf[idx] < priority)
                         continue;
 
                     int pxm    = mosEn ? (px / objMosH) * objMosH : px;
@@ -726,7 +727,14 @@ static void DispatchInterrupts(void)
         {
             // Clear the flag before calling the handler (GBA interrupt protocol).
             WRITE_REG_U16(REG_OFFSET_IF, READ_REG_U16(REG_OFFSET_IF) & ~(1 << i));
-            gIntrTable[bitToTable[i]]();
+            void (*handler)(void) = gIntrTable[bitToTable[i]];
+            if (handler == NULL)
+            {
+                fprintf(stderr, "DispatchInterrupts: null handler for IF bit %d (table[%d])\n",
+                        i, bitToTable[i]);
+                break;
+            }
+            handler();
             break; // one interrupt per call; re-enter next tick for additional pending
         }
     }
@@ -772,11 +780,11 @@ static void UpdateDisplayState(void)
         dispstat |= DISPSTAT_VCOUNT;
     WRITE_REG_U16(REG_OFFSET_DISPSTAT, dispstat);
 
-    if ((dispstat & DISPSTAT_VBLANK) && !(prev & DISPSTAT_VBLANK))
+    bool vblankEdge = (dispstat & DISPSTAT_VBLANK) && !(prev & DISPSTAT_VBLANK);
+    if (vblankEdge)
     {
         if (dispstat & DISPSTAT_VBLANK_INTR)
             WRITE_REG_U16(REG_OFFSET_IF, READ_REG_U16(REG_OFFSET_IF) | INTR_FLAG_VBLANK);
-        RenderAndPresent();
     }
     if ((dispstat & DISPSTAT_HBLANK) && !(prev & DISPSTAT_HBLANK) && (dispstat & DISPSTAT_HBLANK_INTR))
         WRITE_REG_U16(REG_OFFSET_IF, READ_REG_U16(REG_OFFSET_IF) | INTR_FLAG_HBLANK);
@@ -784,7 +792,14 @@ static void UpdateDisplayState(void)
         WRITE_REG_U16(REG_OFFSET_IF, READ_REG_U16(REG_OFFSET_IF) | INTR_FLAG_VCOUNT);
 
     sPrevDispstat = dispstat;
-    DispatchInterrupts();
+    // Set VCOUNT to 161 so SetGpuReg calls inside the ISR see VBlank range
+    // and write immediately to gIoRegisters rather than re-buffering.
+    WRITE_REG_U16(REG_OFFSET_VCOUNT, 161);
+    DispatchInterrupts();   // VBlank ISR → CopyBufferedValuesToGpuRegs() flushes registers
+
+    if (vblankEdge)
+        RenderAndPresent();  // now reads freshly-flushed gIoRegisters
+
     sInUpdate = false;
 }
 
