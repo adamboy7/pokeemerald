@@ -537,8 +537,8 @@ static void Render(void)
                     { {256,256}, {512,256}, {256,512}, {512,512} };
                 int mapW  = sBgDimensions[screenSize][0];
                 int mapH  = sBgDimensions[screenSize][1];
-                u16 hofs  = READ_REG_U16(REG_OFFSET_BG0HOFS + bg * 8);
-                u16 vofs  = READ_REG_U16(REG_OFFSET_BG0VOFS + bg * 8);
+                u16 hofs  = READ_REG_U16(REG_OFFSET_BG0HOFS + bg * 4);
+                u16 vofs  = READ_REG_U16(REG_OFFSET_BG0VOFS + bg * 4);
                 int tileSize = is8bpp ? 64 : 32;
 
                 for (int y = 0; y < 160; y++)
@@ -841,7 +841,7 @@ static void UpdateTimers(void)
 
 // Execute a single DMA channel immediately using the full-width shadow pointers.
 // Shared by both PCFireDmaNow and HandleDmas to avoid duplication.
-static void FireDmaChannel(int i, bool renderAfter)
+static void FireDmaChannel(int i)
 {
     u32 base = REG_OFFSET_DMA0 + i * 12;
     u16 control = READ_REG_U16(base + 10);
@@ -926,8 +926,6 @@ static void FireDmaChannel(int i, bool renderAfter)
     if (control & DMA_INTR_ENABLE)
         WRITE_REG_U16(REG_OFFSET_IF, READ_REG_U16(REG_OFFSET_IF) | (INTR_FLAG_DMA0 << i));
 
-    if (renderAfter)
-        RenderAndPresent();
 }
 
 // Called from PC_DMA_RECORD immediately after DmaSetUnchecked arms a channel.
@@ -945,7 +943,7 @@ void PCFireDmaNow(int dmaNum)
         return;
     if ((control & DMA_START_MASK) != DMA_START_NOW)
         return;
-    FireDmaChannel(dmaNum, false);
+    FireDmaChannel(dmaNum);
 }
 
 static void HandleDmas(void)
@@ -984,7 +982,7 @@ static void HandleDmas(void)
         // Use the full-width shadow pointers to avoid 64-bit truncation.
         // gPCDmaSrc/gPCDmaDst are written by DmaSetUnchecked (via PC_DMA_RECORD)
         // before the DMA_ENABLE bit is set; they hold the complete host address.
-        FireDmaChannel(i, true);
+        FireDmaChannel(i);
     }
 }
 
@@ -1057,8 +1055,5 @@ void PlatformWriteReg(u16 regOffset, u16 value)
     }
 
     HandleDmas();
-
-    if (regOffset <= REG_OFFSET_BLDY)
-        RenderAndPresent();
 }
 #endif // PLATFORM_PC
