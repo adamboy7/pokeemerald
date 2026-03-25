@@ -374,6 +374,21 @@ static void ApplyColorEffects(void)
     }
 }
 
+static void FireDmaChannel(int i);  // forward declaration; defined with DMA logic below
+
+// Fire all DMA_START_HBLANK channels unconditionally.
+// Called once per scanline during rendering (160x per frame), matching GBA hardware.
+static void FireHBlankDmas(void)
+{
+    for (int i = 0; i < DMA_CHANNELS; i++)
+    {
+        u32 base = REG_OFFSET_DMA0 + i * 12;
+        u16 control = READ_REG_U16(base + 10);
+        if ((control & DMA_ENABLE) && (control & DMA_START_MASK) == DMA_START_HBLANK)
+            FireDmaChannel(i);
+    }
+}
+
 static void Render(void)
 {
     u16 dispcnt  = READ_REG_U16(REG_OFFSET_DISPCNT);
@@ -445,53 +460,64 @@ static void Render(void)
     // Affine map dimensions indexed by BGCNT bits 14-15.
     static const int sAffineMapSizes[4] = { 128, 256, 512, 1024 };
 
-    // Render backgrounds, lowest priority first (drawn first = furthest back).
-    for (int prio = 3; prio >= 0; prio--)
+    // Render tile modes scanline-by-scanline so that HBlank DMAs fired after each
+    // row take effect on the next row's register reads (e.g. wavy-water scroll).
+    for (int y = 0; y < 160; y++)
     {
-        for (int bg = 0; bg < 4; bg++)
+        // Keep VCOUNT accurate so SetGpuReg timing checks see the correct scanline.
+        WRITE_REG_U16(REG_OFFSET_VCOUNT, y);
+
+        // Fire VCOUNT interrupt if the match register equals the current line.
         {
-            if (!(dispcnt & (DISPCNT_BG0_ON << bg)))
-                continue;
+            u16 dispstat = READ_REG_U16(REG_OFFSET_DISPSTAT);
+            if (y == (dispstat >> 8) && (dispstat & DISPSTAT_VCOUNT_INTR))
+                WRITE_REG_U16(REG_OFFSET_IF, READ_REG_U16(REG_OFFSET_IF) | INTR_FLAG_VCOUNT);
+        }
 
-            u16 bgcnt = READ_REG_U16(REG_OFFSET_BG0CNT + bg * 2);
-            if ((bgcnt & 3) != prio)
-                continue;
-
-            // Affine BG: mode 1 → BG2 affine; mode 2 → BG2+BG3 affine.
-            bool isAffine = (bgMode == 1 && bg == 2) ||
-                            (bgMode == 2 && (bg == 2 || bg == 3));
-            // Bit in the window mask corresponding to this BG.
-            u8 layerBit = (u8)(1u << bg);
-            bool mosEn = (bgcnt & 0x40) != 0;
-
-            if (isAffine)
+        // Render backgrounds for this scanline, lowest priority first.
+        for (int prio = 3; prio >= 0; prio--)
+        {
+            for (int bg = 0; bg < 4; bg++)
             {
-                // Affine BG: scanline-based affine transformation using
-                // the PA/PB/PC/PD matrix and reference point X/Y registers.
-                u32 paOff = (bg == 2) ? REG_OFFSET_BG2PA : REG_OFFSET_BG3PA;
-                u32 xOff  = (bg == 2) ? REG_OFFSET_BG2X  : REG_OFFSET_BG3X;
-                u32 yOff  = (bg == 2) ? REG_OFFSET_BG2Y  : REG_OFFSET_BG3Y;
+                if (!(dispcnt & (DISPCNT_BG0_ON << bg)))
+                    continue;
 
-                s16 pa = (s16)READ_REG_U16(paOff);
-                s16 pb = (s16)READ_REG_U16(paOff + 2);
-                s16 pc = (s16)READ_REG_U16(paOff + 4);
-                s16 pd = (s16)READ_REG_U16(paOff + 6);
+                u16 bgcnt = READ_REG_U16(REG_OFFSET_BG0CNT + bg * 2);
+                if ((bgcnt & 3) != prio)
+                    continue;
 
-                // 28.8 fixed-point reference point; sign-extend from bit 27.
-                s32 refX = (s32)READ_REG_U32(xOff);
-                s32 refY = (s32)READ_REG_U32(yOff);
-                if (refX & 0x08000000) refX |= (s32)0xF8000000;
-                if (refY & 0x08000000) refY |= (s32)0xF8000000;
+                // Affine BG: mode 1 → BG2 affine; mode 2 → BG2+BG3 affine.
+                bool isAffine = (bgMode == 1 && bg == 2) ||
+                                (bgMode == 2 && (bg == 2 || bg == 3));
+                u8 layerBit = (u8)(1u << bg);
+                bool mosEn = (bgcnt & 0x40) != 0;
 
-                int mapSize  = sAffineMapSizes[(bgcnt >> 14) & 3];
-                int mapTiles = mapSize / 8;
-                bool wrap    = (bgcnt & BGCNT_WRAP) != 0;
-
-                u8 *charBase = BG_CHAR_ADDR((bgcnt >> 2) & 3);
-                u8 *mapBase  = BG_SCREEN_ADDR((bgcnt >> 8) & 31);
-
-                for (int y = 0; y < 160; y++)
+                if (isAffine)
                 {
+                    // Affine BG: scanline-based affine transformation using
+                    // the PA/PB/PC/PD matrix and reference point X/Y registers.
+                    u32 paOff = (bg == 2) ? REG_OFFSET_BG2PA : REG_OFFSET_BG3PA;
+                    u32 xOff  = (bg == 2) ? REG_OFFSET_BG2X  : REG_OFFSET_BG3X;
+                    u32 yOff  = (bg == 2) ? REG_OFFSET_BG2Y  : REG_OFFSET_BG3Y;
+
+                    s16 pa = (s16)READ_REG_U16(paOff);
+                    s16 pb = (s16)READ_REG_U16(paOff + 2);
+                    s16 pc = (s16)READ_REG_U16(paOff + 4);
+                    s16 pd = (s16)READ_REG_U16(paOff + 6);
+
+                    // 28.8 fixed-point reference point; sign-extend from bit 27.
+                    s32 refX = (s32)READ_REG_U32(xOff);
+                    s32 refY = (s32)READ_REG_U32(yOff);
+                    if (refX & 0x08000000) refX |= (s32)0xF8000000;
+                    if (refY & 0x08000000) refY |= (s32)0xF8000000;
+
+                    int mapSize  = sAffineMapSizes[(bgcnt >> 14) & 3];
+                    int mapTiles = mapSize / 8;
+                    bool wrap    = (bgcnt & BGCNT_WRAP) != 0;
+
+                    u8 *charBase = BG_CHAR_ADDR((bgcnt >> 2) & 3);
+                    u8 *mapBase  = BG_SCREEN_ADDR((bgcnt >> 8) & 31);
+
                     int ym = mosEn ? (y / bgMosV) * bgMosV : y;
                     for (int x = 0; x < 240; x++)
                     {
@@ -526,24 +552,22 @@ static void Render(void)
                         sPriorityBuf[idx] = (u8)prio;
                     }
                 }
-            }
-            else
-            {
-                // Text BG: tile-map based rendering with HOFS/VOFS scrolling.
-                bool is8bpp    = (bgcnt & BGCNT_256COLOR) != 0;
-                u8 *charBase   = BG_CHAR_ADDR((bgcnt >> 2) & 3);
-                u8 *screenBase = BG_SCREEN_ADDR((bgcnt >> 8) & 31);
-                int screenSize = (bgcnt >> 14) & 3;
-                static const int sBgDimensions[4][2] =
-                    { {256,256}, {512,256}, {256,512}, {512,512} };
-                int mapW  = sBgDimensions[screenSize][0];
-                int mapH  = sBgDimensions[screenSize][1];
-                u16 hofs  = READ_REG_U16(REG_OFFSET_BG0HOFS + bg * 4);
-                u16 vofs  = READ_REG_U16(REG_OFFSET_BG0VOFS + bg * 4);
-                int tileSize = is8bpp ? 64 : 32;
-
-                for (int y = 0; y < 160; y++)
+                else
                 {
+                    // Text BG: re-read hofs/vofs each scanline so HBlank DMAs take effect.
+                    bool is8bpp    = (bgcnt & BGCNT_256COLOR) != 0;
+                    u8 *charBase   = BG_CHAR_ADDR((bgcnt >> 2) & 3);
+                    u8 *screenBase = BG_SCREEN_ADDR((bgcnt >> 8) & 31);
+                    int screenSize = (bgcnt >> 14) & 3;
+                    static const int sBgDimensions[4][2] =
+                        { {256,256}, {512,256}, {256,512}, {512,512} };
+                    int mapW  = sBgDimensions[screenSize][0];
+                    int mapH  = sBgDimensions[screenSize][1];
+                    int tileSize = is8bpp ? 64 : 32;
+
+                    u16 hofs  = READ_REG_U16(REG_OFFSET_BG0HOFS + bg * 4);
+                    u16 vofs  = READ_REG_U16(REG_OFFSET_BG0VOFS + bg * 4);
+
                     int ym       = mosEn ? (y / bgMosV) * bgMosV : y;
                     int yCoord   = (ym + vofs) % mapH;
                     int tileRow  = yCoord / 8;
@@ -601,49 +625,46 @@ static void Render(void)
                 }
             }
         }
-    }
 
-    // Render sprites
-    if (dispcnt & DISPCNT_OBJ_ON)
-    {
-        bool obj1D = (dispcnt & DISPCNT_OBJ_1D_MAP) != 0;
-        u16 *oam   = (u16 *)gPCOam;
-        for (int i = 0; i < 128; i++)
+        // Render sprites for this scanline.
+        if (dispcnt & DISPCNT_OBJ_ON)
         {
-            u16 attr0 = oam[i * 4 + 0];
-            u16 attr1 = oam[i * 4 + 1];
-            u16 attr2 = oam[i * 4 + 2];
-            if (((attr0 >> 8) & 3) == 2) // OBJ_MODE_HIDDEN
-                continue;
-
-            int y = attr0 & 0xFF;
-            int x = attr1 & 0x1FF;
-            if (y >= 160) y -= 256;
-            if (x >= 240) x -= 512;
-
-            int shape = (attr0 >> 14) & 3;
-            int size  = (attr1 >> 14) & 3;
-            int width, height;
-            GetSpriteSize(shape, size, &width, &height);
-
-            bool is8bpp  = (attr0 & (1 << 13)) != 0;
-            int  tileNum = attr2 & 0x3FF;
-            int  priority = (attr2 >> 10) & 3;
-            int  palNum  = (attr2 >> 12) & 0xF;
-            int  tileSz  = is8bpp ? 64 : 32;
-            int  tilesW  = width / 8;
-            bool mosEn   = (attr0 & 0x1000) != 0;
-
-            // Flip bits are only meaningful in non-affine mode (attr0 bits 8-9 == 0).
-            bool nonAffine = ((attr0 >> 8) & 1) == 0;
-            bool hflip     = nonAffine && (attr1 & (1 << 12)) != 0;
-            bool vflip     = nonAffine && (attr1 & (1 << 13)) != 0;
-
-            for (int py = 0; py < height; py++)
+            bool obj1D = (dispcnt & DISPCNT_OBJ_1D_MAP) != 0;
+            u16 *oam   = (u16 *)gPCOam;
+            for (int i = 0; i < 128; i++)
             {
-                int screenY = y + py;
-                if (screenY < 0 || screenY >= 160)
+                u16 attr0 = oam[i * 4 + 0];
+                u16 attr1 = oam[i * 4 + 1];
+                u16 attr2 = oam[i * 4 + 2];
+                if (((attr0 >> 8) & 3) == 2) // OBJ_MODE_HIDDEN
                     continue;
+
+                int spriteY = attr0 & 0xFF;
+                int spriteX = attr1 & 0x1FF;
+                if (spriteY >= 160) spriteY -= 256;
+                if (spriteX >= 240) spriteX -= 512;
+
+                int shape = (attr0 >> 14) & 3;
+                int size  = (attr1 >> 14) & 3;
+                int width, height;
+                GetSpriteSize(shape, size, &width, &height);
+
+                int py = y - spriteY;
+                if (py < 0 || py >= height)
+                    continue;
+
+                bool is8bpp  = (attr0 & (1 << 13)) != 0;
+                int  tileNum = attr2 & 0x3FF;
+                int  priority = (attr2 >> 10) & 3;
+                int  palNum  = (attr2 >> 12) & 0xF;
+                int  tileSz  = is8bpp ? 64 : 32;
+                int  tilesW  = width / 8;
+                bool mosEn   = (attr0 & 0x1000) != 0;
+
+                // Flip bits are only meaningful in non-affine mode (attr0 bits 8-9 == 0).
+                bool nonAffine = ((attr0 >> 8) & 1) == 0;
+                bool hflip     = nonAffine && (attr1 & (1 << 12)) != 0;
+                bool vflip     = nonAffine && (attr1 & (1 << 13)) != 0;
 
                 // Mosaic: sample from the top-left corner of the mosaic cell.
                 int pym    = mosEn ? (py / objMosV) * objMosV : py;
@@ -653,10 +674,10 @@ static void Render(void)
 
                 for (int px = 0; px < width; px++)
                 {
-                    int screenX = x + px;
+                    int screenX = spriteX + px;
                     if (screenX < 0 || screenX >= 240)
                         continue;
-                    int idx = screenY * 240 + screenX;
+                    int idx = y * 240 + screenX;
                     if (anyWin && !(sWindowMask[idx] & (1 << LAYER_OBJ)))
                         continue;
                     if (sPriorityBuf[idx] < priority)
@@ -692,10 +713,20 @@ static void Render(void)
                     CommitPixel(idx, PlttColorToArgb(objPltt[colorIdx]), LAYER_OBJ);
                     sPriorityBuf[idx] = (u8)priority;
                 }
-            }
 
-            if (sShowSpriteBoxes)
-                DrawRect(x, y, width, height, 0xFFFF00FF);
+                if (sShowSpriteBoxes && py == 0)
+                    DrawRect(spriteX, spriteY, width, height, 0xFFFF00FF);
+            }
+        }
+
+        // Fire HBlank DMAs: may update BG scroll registers for the next scanline.
+        FireHBlankDmas();
+
+        // Record HBlank interrupt flag if enabled (ISRs run during VBlank, not here).
+        {
+            u16 dispstat = READ_REG_U16(REG_OFFSET_DISPSTAT);
+            if (dispstat & DISPSTAT_HBLANK_INTR)
+                WRITE_REG_U16(REG_OFFSET_IF, READ_REG_U16(REG_OFFSET_IF) | INTR_FLAG_HBLANK);
         }
     }
 
