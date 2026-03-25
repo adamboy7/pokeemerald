@@ -289,14 +289,24 @@ static void ComputeWindowMask(u16 dispcnt)
 
     for (int y = 0; y < 160; y++)
     {
-        bool inWin0y = win0 && y >= win0y1 && y < win0y2;
-        bool inWin1y = win1 && y >= win1y1 && y < win1y2;
+        bool inWin0y = win0 && (win0y1 <= win0y2
+            ? (y >= win0y1 && y < win0y2)
+            : (y >= win0y1 || y < win0y2));
+        bool inWin1y = win1 && (win1y1 <= win1y2
+            ? (y >= win1y1 && y < win1y2)
+            : (y >= win1y1 || y < win1y2));
         for (int x = 0; x < 240; x++)
         {
             u8 mask;
-            if (inWin0y && x >= win0x1 && x < win0x2)
+            bool inWin0x = win0x1 <= win0x2
+                ? (x >= win0x1 && x < win0x2)
+                : (x >= win0x1 || x < win0x2);
+            bool inWin1x = win1x1 <= win1x2
+                ? (x >= win1x1 && x < win1x2)
+                : (x >= win1x1 || x < win1x2);
+            if (inWin0y && inWin0x)
                 mask = win0_mask;
-            else if (inWin1y && x >= win1x1 && x < win1x2)
+            else if (inWin1y && inWin1x)
                 mask = win1_mask;
             else
                 mask = out_mask;
@@ -477,7 +487,7 @@ static void Render(void)
         // Render backgrounds for this scanline, lowest priority first.
         for (int prio = 3; prio >= 0; prio--)
         {
-            for (int bg = 0; bg < 4; bg++)
+            for (int bg = 3; bg >= 0; bg--)
             {
                 if (!(dispcnt & (DISPCNT_BG0_ON << bg)))
                     continue;
@@ -631,7 +641,7 @@ static void Render(void)
         {
             bool obj1D = (dispcnt & DISPCNT_OBJ_1D_MAP) != 0;
             u16 *oam   = (u16 *)gPCOam;
-            for (int i = 0; i < 128; i++)
+            for (int i = 127; i >= 0; i--)
             {
                 u16 attr0 = oam[i * 4 + 0];
                 u16 attr1 = oam[i * 4 + 1];
