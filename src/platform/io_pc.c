@@ -36,6 +36,9 @@ struct TimerState
 static struct TimerState sTimers[TIMER_COUNT];
 static Uint64 sFrameStart;
 static u16 sPrevDispstat;
+// Set while an ISR is being dispatched to prevent HandleDmas from firing
+// VBlank/HBlank DMAs mid-interrupt (e.g. during CopyBufferedValuesToGpuRegs).
+static bool sInIsrDispatch = false;
 
 static SDL_Window *sWindow;
 static SDL_Renderer *sRenderer;
@@ -775,7 +778,9 @@ static void DispatchInterrupts(void)
                         i, bitToTable[i]);
                 break;
             }
+            sInIsrDispatch = true;
             handler();
+            sInIsrDispatch = false;
             break; // one interrupt per call; re-enter next tick for additional pending
         }
     }
@@ -1004,6 +1009,12 @@ void PCFireDmaNow(int dmaNum)
 
 static void HandleDmas(void)
 {
+    // Don't fire VBlank/HBlank DMAs while an ISR is executing — the ISR itself
+    // (e.g. CopyBufferedValuesToGpuRegs via PlatformWriteReg) would re-enter here
+    // before VRAM/palette state is consistent.
+    if (sInIsrDispatch)
+        return;
+
     // Track rising edges so each HBLANK/VBLANK DMA fires exactly once per
     // transition rather than on every PlatformReadReg/PlatformWriteReg call.
     static bool sPrevHBlank = false;

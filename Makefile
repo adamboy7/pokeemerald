@@ -297,10 +297,15 @@ $(BUILD_DIR)/pc/pokeemerald: $(PC_OBJS)
 	$(HOSTCC) $(PC_OBJS) $(AUDIO_LIBS) -lm $(NO_PIE_LDFLAGS) $(PC_LDFLAGS) -g -o $@
 
 # Compile C sources for the PC build.
+# Pipe through preproc (charmap conversion) so _("...") string literals are
+# converted to GBA byte encoding (EOS = 0xFF) instead of staying as raw ASCII.
 $(PC_OBJ_DIR)/%.o: %.c
 	mkdir -p $(dir $@)
+	$(HOSTCC) -E -DMODERN=$(MODERN) -DPLATFORM_PC -DUSE_SDL -DUBFIX -D__INTELLISENSE__ -I include -include gba/types.h \
+	$(SDL_CFLAGS) $< | \
+	$(PREPROC) -i $< charmap.txt | \
 	$(HOSTCC) -DMODERN=$(MODERN) -DPLATFORM_PC -DUSE_SDL -DUBFIX -D__INTELLISENSE__ -I include -include gba/types.h \
-	$(SDL_CFLAGS) $(NO_PIE_CFLAGS) -g -c $< -o $@
+	$(SDL_CFLAGS) $(NO_PIE_CFLAGS) -g -c -x c - -o $@
 
 # Convert MIDI files into objects for the PC build.
 $(PC_OBJ_DIR)/sound/songs/midi/%.o: sound/songs/midi/%.mid
