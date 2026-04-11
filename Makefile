@@ -304,7 +304,7 @@ $(PC_OBJ_DIR)/%.o: %.c
 	$(HOSTCC) -E -DMODERN=$(MODERN) -DPLATFORM_PC -DUSE_SDL -DUBFIX -D__INTELLISENSE__ -I include -include gba/types.h \
 	$(SDL_CFLAGS) $< | \
 	$(PREPROC) -i $< charmap.txt | \
-	$(HOSTCC) -DMODERN=$(MODERN) -DPLATFORM_PC -DUSE_SDL -DUBFIX -D__INTELLISENSE__ -I include -include gba/types.h \
+	$(HOSTCC) -DMODERN=$(MODERN) -DPLATFORM_PC -DUSE_SDL -DUBFIX -D__INTELLISENSE__ -I include \
 	$(SDL_CFLAGS) $(NO_PIE_CFLAGS) -g -c -x c - -o $@
 
 # Convert MIDI files into objects for the PC build.
